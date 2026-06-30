@@ -106,6 +106,14 @@ export default async function BusinessPortalPage({ params }: PortalPageProps) {
   const requests = asRecordList(records, "requests");
   const savedReports = asRecordList(records, "savedReports");
   const automationRules = asRecordList(records, "automationRules");
+  const brandingSettings = asRecordList(records, "brandingSettings")[0] ?? {};
+  const businessProfile = asRecordList(records, "businessProfile")[0] ?? {};
+  const subscription = asRecordList(records, "subscription")[0] ?? {};
+  const billingHistory = asRecordList(records, "billingHistory");
+  const brandingEnabled = brandingSettings.enabled === true || brandingSettings.enabled === "true";
+  const logoUrl = String(brandingSettings.logoUrl ?? "");
+  const subscriptionExpiry = String(subscription.expiryDate ?? "Not set by parent");
+  const subscriptionStatus = String(subscription.status ?? "Active");
   const hrAnalytics = buildHrAnalytics(records);
   const departmentDistribution = groupRecords(employees, "department");
   const leaveDistribution = groupRecords(leaveRequests, "type");
@@ -188,7 +196,7 @@ export default async function BusinessPortalPage({ params }: PortalPageProps) {
       });
     });
 
-    redirect(`/portal/${domain}`);
+    redirect(`/portal/${domain}#settings`);
   }
 
   async function deleteUser(formData: FormData) {
@@ -232,7 +240,7 @@ export default async function BusinessPortalPage({ params }: PortalPageProps) {
       })
     ]);
 
-    redirect(`/portal/${domain}`);
+    redirect(`/portal/${domain}#settings`);
   }
 
   async function updateBusinessRecords(updater: (records: ModuleRecords) => ModuleRecords, message: string) {
@@ -454,11 +462,84 @@ export default async function BusinessPortalPage({ params }: PortalPageProps) {
     );
   }
 
+  async function updateBusinessProfile(formData: FormData) {
+    "use server";
+
+    const current = await getCurrentSession();
+    if (!current || current.user.business.domain !== domain) redirect(`/portal/${domain}/login`);
+    if (current.user.role !== "OWNER" && current.user.role !== "ADMIN") return;
+
+    const businessName = String(formData.get("businessName") ?? "").trim();
+    const legalName = String(formData.get("legalName") ?? "").trim();
+    const website = String(formData.get("website") ?? "").trim();
+    const supportEmail = String(formData.get("supportEmail") ?? "").trim();
+    const phone = String(formData.get("phone") ?? "").trim();
+    const address = String(formData.get("address") ?? "").trim();
+    if (!businessName) return;
+
+    const freshBusiness = await prisma.business.findUnique({ where: { id: current.user.businessId } });
+    if (!freshBusiness) return;
+
+    const currentRecords = freshBusiness.records as ModuleRecords;
+    const currentNotifications = freshBusiness.notifications as Array<{ channel: string; createdAt: string; message: string }>;
+
+    await prisma.business.update({
+      data: {
+        businessName,
+        notifications: [{ channel: "In-app", createdAt: today(), message: "Business profile updated" }, ...currentNotifications] as Prisma.InputJsonValue,
+        records: {
+          ...currentRecords,
+          businessProfile: [{ address, legalName, phone, supportEmail, updatedAt: today(), website }]
+        } as Prisma.InputJsonValue
+      },
+      where: { id: freshBusiness.id }
+    });
+
+    redirect(`/portal/${domain}#settings`);
+  }
+
+  async function updateBranding(formData: FormData) {
+    "use server";
+
+    const current = await getCurrentSession();
+    if (!current || current.user.business.domain !== domain) redirect(`/portal/${domain}/login`);
+    if (current.user.role !== "OWNER" && current.user.role !== "ADMIN") return;
+
+    const accent = String(formData.get("accent") ?? current.user.business.accent).trim();
+    const logoUrlValue = String(formData.get("logoUrl") ?? "").trim();
+    const brandName = String(formData.get("brandName") ?? current.user.business.businessName).trim();
+    const enabled = formData.get("enabled") === "on";
+    const matchLogo = formData.get("matchLogo") === "on";
+    if (!accent || !brandName) return;
+
+    const freshBusiness = await prisma.business.findUnique({ where: { id: current.user.businessId } });
+    if (!freshBusiness) return;
+
+    const currentRecords = freshBusiness.records as ModuleRecords;
+    const currentNotifications = freshBusiness.notifications as Array<{ channel: string; createdAt: string; message: string }>;
+
+    await prisma.business.update({
+      data: {
+        accent,
+        notifications: [{ channel: "In-app", createdAt: today(), message: "Branding updated" }, ...currentNotifications] as Prisma.InputJsonValue,
+        records: {
+          ...currentRecords,
+          brandingSettings: [{ accent, brandName, enabled, logoUrl: logoUrlValue, matchLogo, updatedAt: today() }]
+        } as Prisma.InputJsonValue
+      },
+      where: { id: freshBusiness.id }
+    });
+
+    redirect(`/portal/${domain}#settings`);
+  }
+
   return (
     <main className="app-shell hr-shell" style={{ "--accent": business.accent } as CSSProperties}>
       <header className="topbar">
         <div className="brand">
-          <div className="brand-mark">GM</div>
+          <div className="brand-mark">
+            {brandingEnabled && logoUrl ? <img alt={`${business.businessName} logo`} src={logoUrl} /> : "GM"}
+          </div>
           <div>
             <p className="brand-title">{business.businessName}</p>
             <p className="brand-subtitle">
@@ -480,7 +561,9 @@ export default async function BusinessPortalPage({ params }: PortalPageProps) {
         <aside className="portal-sidebar">
           <div className="sidebar-card">
             <div className="tenant-badge">
-              <div className="tenant-logo">{business.businessName.slice(0, 2).toUpperCase()}</div>
+              <div className="tenant-logo">
+                {brandingEnabled && logoUrl ? <img alt={`${business.businessName} logo`} src={logoUrl} /> : business.businessName.slice(0, 2).toUpperCase()}
+              </div>
               <div>
                 <p className="tenant-name">{business.businessName}</p>
                 <p className="tenant-url">{business.domain}</p>
@@ -488,11 +571,10 @@ export default async function BusinessPortalPage({ params }: PortalPageProps) {
             </div>
           </div>
           <nav className="sidebar-nav" aria-label="Business portal sections">
-            <a href="#overview">Overview</a>
-            {canManageUsers ? <a href="#users">Users</a> : <a href="#my-portal">My Portal</a>}
+            <a href={canManageUsers && business.industryKey === "hr" ? "#command-center" : "#overview"}>Overview</a>
+            {!canManageUsers ? <a href="#my-portal">My Portal</a> : null}
             {canManageUsers && business.industryKey === "hr" ? (
               <>
-                <a href="#command-center">Command Center</a>
                 <a href="#hr-suite">HR Suite</a>
                 <a href="#reports">Reports</a>
                 <a href="#automations">Automations</a>
@@ -501,6 +583,10 @@ export default async function BusinessPortalPage({ params }: PortalPageProps) {
             ) : null}
             <a href="#summary">Summary</a>
             <a href="#settings">Settings</a>
+            <a className="subscription-nav-button" href="#subscription">
+              <span>Subscription</span>
+              <small>{business.packageName} / {subscriptionStatus}</small>
+            </a>
             <a href="#notifications">Notifications</a>
           </nav>
         </aside>
@@ -526,7 +612,7 @@ export default async function BusinessPortalPage({ params }: PortalPageProps) {
       </section>
 
       {canManageUsers ? (
-        <section className="business-board default-panel" id="users">
+        <section className="business-board" id="users">
           <div className="section-header">
             <div>
               <h2 className="section-title">User Management</h2>
@@ -610,7 +696,7 @@ export default async function BusinessPortalPage({ params }: PortalPageProps) {
       )}
 
       {canManageUsers && business.industryKey === "hr" ? (
-        <section className="business-board" id="command-center">
+        <section className="business-board default-panel" id="command-center">
           <div className="section-header">
             <div>
               <h2 className="section-title">HR Command Center</h2>
@@ -993,7 +1079,7 @@ export default async function BusinessPortalPage({ params }: PortalPageProps) {
         <div className="section-header">
           <div>
             <h2 className="section-title">Workspace Settings</h2>
-            <p className="section-copy">Branding, access, hosting, package, and enabled service overview for this tenant.</p>
+            <p className="section-copy">Business profile, branding, access, and user login controls for this tenant.</p>
           </div>
         </div>
         <div className="settings-grid">
@@ -1019,6 +1105,175 @@ export default async function BusinessPortalPage({ params }: PortalPageProps) {
             <p className="row-title">Enabled Modules</p>
             <p className="row-subtitle">Controlled by parent plan</p>
             <p className="settings-value">{moduleStats.length} services active</p>
+          </div>
+        </div>
+
+        {canManageUsers ? (
+          <div className="settings-layout">
+            <form action={updateBusinessProfile} className="section form-grid no-shadow-section">
+              <div>
+                <h3 className="section-title">Business Profile</h3>
+                <p className="section-copy">Details shown across the owner and employee workspace.</p>
+              </div>
+              <label className="field">
+                <span>Business name</span>
+                <input className="input" defaultValue={business.businessName} name="businessName" required />
+              </label>
+              <label className="field">
+                <span>Legal name</span>
+                <input className="input" defaultValue={String(businessProfile.legalName ?? "")} name="legalName" />
+              </label>
+              <label className="field">
+                <span>Website</span>
+                <input className="input" defaultValue={String(businessProfile.website ?? "")} name="website" />
+              </label>
+              <label className="field">
+                <span>Support email</span>
+                <input className="input" defaultValue={String(businessProfile.supportEmail ?? "")} name="supportEmail" type="email" />
+              </label>
+              <label className="field">
+                <span>Phone</span>
+                <input className="input" defaultValue={String(businessProfile.phone ?? "")} name="phone" />
+              </label>
+              <label className="field">
+                <span>Address</span>
+                <input className="input" defaultValue={String(businessProfile.address ?? "")} name="address" />
+              </label>
+              <button className="primary-button" type="submit">Save profile</button>
+            </form>
+
+            <form action={updateBranding} className="section form-grid no-shadow-section">
+              <div>
+                <h3 className="section-title">Branding</h3>
+                <p className="section-copy">Enable business branding for owner and employee-facing pages.</p>
+              </div>
+              <label className="check-row">
+                <input defaultChecked={brandingEnabled} name="enabled" type="checkbox" />
+                Enable custom branding
+              </label>
+              <label className="field">
+                <span>Display brand name</span>
+                <input className="input" defaultValue={String(brandingSettings.brandName ?? business.businessName)} name="brandName" required />
+              </label>
+              <label className="field">
+                <span>Logo URL</span>
+                <input className="input" defaultValue={logoUrl} name="logoUrl" placeholder="https://..." />
+              </label>
+              <label className="field">
+                <span>Accent color</span>
+                <input className="input" defaultValue={business.accent} name="accent" type="color" />
+              </label>
+              <label className="check-row">
+                <input defaultChecked={brandingSettings.matchLogo === true || brandingSettings.matchLogo === "true"} name="matchLogo" type="checkbox" />
+                Match colors to provided logo
+              </label>
+              <div className="brand-preview">
+                <div className="brand-mark">
+                  {logoUrl ? <img alt="Brand preview" src={logoUrl} /> : business.businessName.slice(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <p className="row-title">{String(brandingSettings.brandName ?? business.businessName)}</p>
+                  <p className="row-subtitle">Preview for employee login and portal pages</p>
+                </div>
+              </div>
+              <button className="primary-button" type="submit">Save branding</button>
+            </form>
+
+            <div className="section no-shadow-section">
+              <div className="section-header">
+                <div>
+                  <h3 className="section-title">Users and Logins</h3>
+                  <p className="section-copy">Create, remove, and control who can access this business workspace.</p>
+                </div>
+              </div>
+              <div className="settings-users-grid">
+                <div className="stack-list">
+                  {business.users.map((user) => (
+                    <div className="record-card" key={`settings-${user.id}`}>
+                      <div>
+                        <p className="row-title">{user.name}</p>
+                        <p className="row-subtitle">{user.email}</p>
+                      </div>
+                      <div className="record-actions">
+                        <span className="status-badge approved">{user.role}</span>
+                        {user.role !== "OWNER" ? (
+                          <form action={deleteUser}>
+                            <input name="userId" type="hidden" value={user.id} />
+                            <button className="secondary-button" type="submit">Remove</button>
+                          </form>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <form action={createUser} className="form-grid">
+                  <label className="field">
+                    <span>Name</span>
+                    <input className="input" name="name" required />
+                  </label>
+                  <label className="field">
+                    <span>Email</span>
+                    <input className="input" name="email" required type="email" />
+                  </label>
+                  <label className="field">
+                    <span>Role</span>
+                    <select className="select" name="role" defaultValue="CLIENT">
+                      <option value="ADMIN">Admin</option>
+                      <option value="STAFF">Staff</option>
+                      <option value="CLIENT">{meta.clientLabel}</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Temporary password</span>
+                    <input className="input" minLength={8} name="password" required type="password" />
+                  </label>
+                  <button className="primary-button" type="submit">Create login</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </section>
+
+      <section className="business-board" id="subscription">
+        <div className="section-header">
+          <div>
+            <h2 className="section-title">Subscription and Billing</h2>
+            <p className="section-copy">Package, expiry date, parent-defined plan details, and billing history.</p>
+          </div>
+        </div>
+        <div className="settings-grid">
+          <div className="settings-card">
+            <p className="row-title">Current package</p>
+            <p className="settings-value">{business.packageName}</p>
+          </div>
+          <div className="settings-card">
+            <p className="row-title">Status</p>
+            <p className="settings-value">{subscriptionStatus}</p>
+          </div>
+          <div className="settings-card">
+            <p className="row-title">Expiry date</p>
+            <p className="settings-value">{subscriptionExpiry}</p>
+          </div>
+          <div className="settings-card">
+            <p className="row-title">Hosting</p>
+            <p className="settings-value">{business.hosting}</p>
+          </div>
+        </div>
+        <div className="section no-shadow-section billing-panel">
+          <h3 className="section-title">Billing History</h3>
+          <div className="stack-list">
+            {billingHistory.length ? billingHistory.map((item) => (
+              <div className="record-card" key={String(item.id ?? item.invoice ?? item.createdAt)}>
+                <div>
+                  <p className="row-title">{String(item.invoice ?? item.description ?? "Invoice")}</p>
+                  <p className="row-subtitle">{String(item.date ?? item.createdAt ?? "No date")} / {String(item.status ?? "Recorded")}</p>
+                </div>
+                <p className="settings-value">{String(item.amount ?? "")}</p>
+              </div>
+            )) : (
+              <div className="empty-state">No billing history has been added by the parent account yet.</div>
+            )}
           </div>
         </div>
       </section>
