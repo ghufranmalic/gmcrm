@@ -1062,6 +1062,93 @@ button {
   line-height: 1.35;
 }
 
+.metric-detail {
+  margin: 9px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.chart-panel,
+.enterprise-module-card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.bar-list {
+  display: grid;
+  gap: 10px;
+}
+
+.bar-row {
+  display: grid;
+  grid-template-columns: minmax(86px, 0.8fr) minmax(0, 1.4fr) auto;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.bar-track {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 10%, #eef3ec);
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.enterprise-module-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.enterprise-module-card {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+
+.enterprise-module-card h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.enterprise-module-card p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.compact-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .portal-list {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -1200,7 +1287,9 @@ button {
 
   .industry-card-grid,
   .client-action-grid,
-  .business-grid {
+  .business-grid,
+  .enterprise-module-grid,
+  .kpi-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1238,6 +1327,10 @@ button {
   .template-grid,
   .metric-grid,
   .module-board,
+  .analytics-grid,
+  .compact-field-grid,
+  .enterprise-module-grid,
+  .kpi-grid,
   .hr-metrics,
   .employee-metrics {
     grid-template-columns: 1fr;

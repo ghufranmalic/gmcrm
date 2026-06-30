@@ -2,6 +2,19 @@ import { redirect } from "next/navigation";
 import type { Prisma } from "@prisma/client";
 import type { CSSProperties } from "react";
 import { clearSessionCookie, getCurrentSession, hashPassword } from "@/lib/auth";
+import {
+  asRecordList,
+  buildHrAnalytics,
+  defaultHrReportTemplates,
+  enterpriseHrModules,
+  getRecordValue,
+  groupRecords,
+  hrAutomationBlueprints,
+  recordLabel,
+  today,
+  type ModuleRecords,
+  type PortalRecord
+} from "@/lib/hr-suite";
 import { prisma } from "@/lib/prisma";
 
 const industryMeta = {
@@ -14,7 +27,7 @@ const industryMeta = {
   hr: {
     adminLabel: "HR Admin",
     clientLabel: "Employee",
-    modules: ["employees", "departments", "leaveRequests", "sickNotes", "policies", "warningTemplates", "warnings"],
+    modules: enterpriseHrModules.map((module) => module.key),
     portalCopy: "Employees can request leave, upload sick notes, view policies, and see visible HR records."
   },
   restaurant: {
@@ -34,21 +47,6 @@ const industryMeta = {
 type PortalPageProps = {
   params: Promise<{ domain: string }>;
 };
-
-type ModuleRecords = Record<string, Array<Record<string, unknown>>>;
-type PortalRecord = Record<string, unknown>;
-
-function asRecordList(records: ModuleRecords, key: string) {
-  return Array.isArray(records[key]) ? records[key] : [];
-}
-
-function recordLabel(record: PortalRecord) {
-  return String(record.name ?? record.person ?? record.title ?? record.reason ?? "Record");
-}
-
-function today() {
-  return new Date().toISOString().slice(0, 10);
-}
 
 function peopleModuleForIndustry(industryKey: keyof typeof industryMeta) {
   const peopleModules = {
@@ -100,6 +98,20 @@ export default async function BusinessPortalPage({ params }: PortalPageProps) {
   const leaveRequests = asRecordList(records, "leaveRequests");
   const policies = asRecordList(records, "policies");
   const warnings = asRecordList(records, "warnings");
+  const attendance = asRecordList(records, "attendance");
+  const payroll = asRecordList(records, "payroll");
+  const performance = asRecordList(records, "performance");
+  const documents = asRecordList(records, "documents");
+  const recruitment = asRecordList(records, "recruitment");
+  const requests = asRecordList(records, "requests");
+  const savedReports = asRecordList(records, "savedReports");
+  const automationRules = asRecordList(records, "automationRules");
+  const hrAnalytics = buildHrAnalytics(records);
+  const departmentDistribution = groupRecords(employees, "department");
+  const leaveDistribution = groupRecords(leaveRequests, "type");
+  const attendanceDistribution = groupRecords(attendance, "status");
+  const recruitmentDistribution = groupRecords(recruitment, "stage");
+  const reportDatasets = enterpriseHrModules.map((module) => ({ key: module.key, label: module.label }));
   const moduleStats = meta.modules.map((key) => ({
     key,
     count: Array.isArray(records[key]) ? records[key].length : 0
@@ -362,6 +374,86 @@ export default async function BusinessPortalPage({ params }: PortalPageProps) {
     );
   }
 
+  async function createEnterpriseHrRecord(formData: FormData) {
+    "use server";
+
+    const moduleKey = String(formData.get("moduleKey") ?? "").trim();
+    const moduleConfig = enterpriseHrModules.find((module) => module.key === moduleKey);
+    if (!moduleConfig) return;
+
+    const newRecord: PortalRecord = {
+      id: crypto.randomUUID(),
+      createdAt: today(),
+      source: "Owner portal"
+    };
+
+    for (const field of moduleConfig.fields) {
+      const value = String(formData.get(field.key) ?? "").trim();
+      if (field.required && !value) return;
+      if (value) newRecord[field.key] = value;
+    }
+
+    if (!newRecord.status && ["leaveRequests", "attendance", "payroll", "performance", "documents", "recruitment", "requests"].includes(moduleKey)) {
+      newRecord.status =
+        moduleKey === "leaveRequests"
+          ? "Pending"
+          : moduleKey === "recruitment"
+            ? "Applied"
+            : moduleKey === "documents"
+              ? "Active"
+              : "Open";
+    }
+
+    await updateBusinessRecords(
+      (currentRecords) => ({
+        ...currentRecords,
+        [moduleKey]: [newRecord, ...asRecordList(currentRecords, moduleKey)]
+      }),
+      `${moduleConfig.label} record created: ${recordLabel(newRecord)}`
+    );
+  }
+
+  async function saveReportTemplate(formData: FormData) {
+    "use server";
+
+    const name = String(formData.get("name") ?? "").trim();
+    const dataset = String(formData.get("dataset") ?? "").trim();
+    const groupBy = String(formData.get("groupBy") ?? "").trim();
+    const filter = String(formData.get("filter") ?? "").trim();
+    if (!name || !dataset || !groupBy) return;
+
+    await updateBusinessRecords(
+      (currentRecords) => ({
+        ...currentRecords,
+        savedReports: [
+          { id: crypto.randomUUID(), createdAt: today(), dataset, filter, groupBy, name },
+          ...asRecordList(currentRecords, "savedReports")
+        ]
+      }),
+      `Report template saved: ${name}`
+    );
+  }
+
+  async function createAutomationRule(formData: FormData) {
+    "use server";
+
+    const trigger = String(formData.get("trigger") ?? "").trim();
+    const channel = String(formData.get("channel") ?? "Email").trim();
+    const audience = String(formData.get("audience") ?? "Employee").trim();
+    if (!trigger) return;
+
+    await updateBusinessRecords(
+      (currentRecords) => ({
+        ...currentRecords,
+        automationRules: [
+          { id: crypto.randomUUID(), audience, channel, createdAt: today(), enabled: true, trigger },
+          ...asRecordList(currentRecords, "automationRules")
+        ]
+      }),
+      `Automation rule created: ${trigger}`
+    );
+  }
+
   return (
     <main className="app-shell hr-shell" style={{ "--accent": business.accent } as CSSProperties}>
       <header className="topbar">
@@ -483,6 +575,206 @@ export default async function BusinessPortalPage({ params }: PortalPageProps) {
           </div>
         </section>
       )}
+
+      {canManageUsers && business.industryKey === "hr" ? (
+        <section className="business-board">
+          <div className="section-header">
+            <div>
+              <h2 className="section-title">HR Command Center</h2>
+              <p className="section-copy">
+                Enterprise HR operations covering workforce data, leave, attendance, payroll, performance, documents,
+                recruitment, reporting, and automations.
+              </p>
+            </div>
+          </div>
+
+          <div className="kpi-grid">
+            <MetricCard label="Active employees" value={hrAnalytics.activeEmployees} detail={`${hrAnalytics.departments} departments`} />
+            <MetricCard label="Attrition rate" value={`${hrAnalytics.attritionRate}%`} detail="Inactive employees / total" />
+            <MetricCard label="Attendance compliance" value={`${hrAnalytics.attendanceCompliance}%`} detail={`${attendance.length} attendance records`} />
+            <MetricCard label="Pending leave" value={hrAnalytics.leavePending} detail="Awaiting action" />
+            <MetricCard label="Hiring pipeline" value={hrAnalytics.hiringPipeline} detail="Open candidate records" />
+            <MetricCard label="Payroll completion" value={`${hrAnalytics.payrollCompletion}%`} detail={`${payroll.length} payroll records`} />
+            <MetricCard label="Warnings / incidents" value={hrAnalytics.warnings} detail="Disciplinary visibility" />
+            <MetricCard label="Documents" value={documents.length} detail="Contracts, policies, certificates" />
+          </div>
+
+          <div className="analytics-grid">
+            <ChartPanel title="Department Distribution" data={departmentDistribution} />
+            <ChartPanel title="Leave Analytics" data={leaveDistribution} />
+            <ChartPanel title="Attendance Analytics" data={attendanceDistribution} />
+            <ChartPanel title="Hiring Pipeline" data={recruitmentDistribution} />
+          </div>
+        </section>
+      ) : null}
+
+      {canManageUsers && business.industryKey === "hr" ? (
+        <section className="business-board">
+          <div className="section-header">
+            <div>
+              <h2 className="section-title">World-Class HR Services</h2>
+              <p className="section-copy">
+                Add operational records across the same service families used by leading HR platforms: people, time,
+                payroll, talent, documents, recruitment, self-service, and compliance.
+              </p>
+            </div>
+          </div>
+
+          <datalist id="employee-options-enterprise">
+            {employees.map((employee) => (
+              <option key={String(employee.id ?? recordLabel(employee))} value={recordLabel(employee)} />
+            ))}
+          </datalist>
+
+          <div className="enterprise-module-grid">
+            {enterpriseHrModules.map((module) => (
+              <EnterpriseHrModuleCard
+                key={module.key}
+                module={module}
+                recordCount={asRecordList(records, module.key).length}
+                createAction={createEnterpriseHrRecord}
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {canManageUsers && business.industryKey === "hr" ? (
+        <section className="business-board">
+          <div className="section-header">
+            <div>
+              <h2 className="section-title">Reporting Engine</h2>
+              <p className="section-copy">
+                Build dynamic reports by dataset and grouping, save templates, and export tenant-isolated data.
+              </p>
+            </div>
+          </div>
+
+          <div className="dashboard-grid">
+            <form action={saveReportTemplate} className="section form-grid no-shadow-section">
+              <label className="field">
+                <span>Report name</span>
+                <input className="input" name="name" required placeholder="Monthly leave by department" />
+              </label>
+              <label className="field">
+                <span>Dataset</span>
+                <select className="select" name="dataset">
+                  {reportDatasets.map((dataset) => (
+                    <option key={dataset.key} value={dataset.key}>{dataset.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Group by</span>
+                <select className="select" name="groupBy">
+                  <option value="department">Department</option>
+                  <option value="status">Status</option>
+                  <option value="role">Role</option>
+                  <option value="type">Type</option>
+                  <option value="stage">Hiring stage</option>
+                  <option value="createdAt">Created date</option>
+                </select>
+              </label>
+              <label className="field">
+                <span>Filter text</span>
+                <input className="input" name="filter" placeholder="Optional contains filter" />
+              </label>
+              <button className="primary-button" type="submit">Save report template</button>
+            </form>
+
+            <div className="section no-shadow-section">
+              <h3 className="section-title">Default Executive Reports</h3>
+              <div className="stack-list">
+                {[...defaultHrReportTemplates, ...savedReports].slice(0, 8).map((report, index) => (
+                  <ReportRow
+                    businessId={business.id}
+                    dataset={String(report.dataset)}
+                    groupBy={String(report.groupBy)}
+                    key={`${String(report.name)}-${index}`}
+                    name={String(report.name)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="section no-shadow-section">
+              <h3 className="section-title">Coverage Checklist</h3>
+              <div className="stack-list">
+                {[
+                  "Date range filters",
+                  "Department filters",
+                  "Role filters",
+                  "Group by department / month / role / status",
+                  "CSV export now",
+                  "PDF export endpoint now",
+                  "Saved report templates"
+                ].map((item) => (
+                  <div className="notification-row" key={item}>
+                    <span className="row-icon">OK</span>
+                    <p className="row-title">{item}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {canManageUsers && business.industryKey === "hr" ? (
+        <section className="business-board">
+          <div className="section-header">
+            <div>
+              <h2 className="section-title">Notification Automation</h2>
+              <p className="section-copy">
+                Event-based trigger to action rules for WhatsApp, SMS, Email, and in-app notifications.
+              </p>
+            </div>
+          </div>
+
+          <div className="dashboard-grid wide-left">
+            <div className="section no-shadow-section">
+              <h3 className="section-title">Active Rules</h3>
+              <div className="stack-list">
+                {[...automationRules, ...hrAutomationBlueprints.map((trigger, index) => ({ id: `blueprint-${index}`, trigger, channel: "Blueprint", audience: "HR" }))].slice(0, 10).map((rule) => (
+                  <div className="notification-row" key={String(rule.id ?? rule.trigger)}>
+                    <span className="row-icon">A</span>
+                    <div>
+                      <p className="row-title">{String(rule.trigger)}</p>
+                      <p className="row-subtitle">{String(rule.channel)} / {String(rule.audience)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <form action={createAutomationRule} className="section form-grid no-shadow-section">
+              <label className="field">
+                <span>Trigger</span>
+                <input className="input" name="trigger" required placeholder="Contract expiring in 30 days" />
+              </label>
+              <label className="field">
+                <span>Channel</span>
+                <select className="select" name="channel">
+                  <option>WhatsApp</option>
+                  <option>SMS</option>
+                  <option>Email</option>
+                  <option>In-app</option>
+                </select>
+              </label>
+              <label className="field">
+                <span>Audience</span>
+                <select className="select" name="audience">
+                  <option>Employee</option>
+                  <option>Manager</option>
+                  <option>HR Admin</option>
+                  <option>All affected department users</option>
+                </select>
+              </label>
+              <button className="primary-button" type="submit">Create automation</button>
+            </form>
+          </div>
+        </section>
+      ) : null}
 
       {canManageUsers && business.industryKey === "hr" ? (
         <section className="business-board">
@@ -698,6 +990,111 @@ function MiniRecordList({ label, records }: { label: string; records: PortalReco
         <p className="row-subtitle">
           {records.length ? records.slice(0, 3).map(recordLabel).join(" / ") : "No records yet"}
         </p>
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({ detail, label, value }: { detail: string; label: string; value: number | string }) {
+  return (
+    <article className="metric">
+      <p className="metric-value">{value}</p>
+      <p className="metric-label">{label}</p>
+      <p className="metric-detail">{detail}</p>
+    </article>
+  );
+}
+
+function ChartPanel({ data, title }: { data: Record<string, number>; title: string }) {
+  const entries = Object.entries(data).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const max = Math.max(1, ...entries.map(([, value]) => value));
+
+  return (
+    <article className="chart-panel">
+      <div className="section-header">
+        <h3 className="section-title">{title}</h3>
+        <span className="mini-pill">{entries.reduce((sum, [, value]) => sum + value, 0)} records</span>
+      </div>
+      <div className="bar-list">
+        {entries.length ? entries.map(([label, value]) => (
+          <div className="bar-row" key={label}>
+            <span>{label}</span>
+            <div className="bar-track">
+              <div className="bar-fill" style={{ width: `${Math.max(8, (value / max) * 100)}%` }} />
+            </div>
+            <strong>{value}</strong>
+          </div>
+        )) : <p className="empty-state">No records yet</p>}
+      </div>
+    </article>
+  );
+}
+
+function EnterpriseHrModuleCard({
+  createAction,
+  module,
+  recordCount
+}: {
+  createAction: (formData: FormData) => void;
+  module: (typeof enterpriseHrModules)[number];
+  recordCount: number;
+}) {
+  return (
+    <form action={createAction} className="enterprise-module-card">
+      <input name="moduleKey" type="hidden" value={module.key} />
+      <div className="business-card-top">
+        <div>
+          <h3>{module.label}</h3>
+          <p>{module.description}</p>
+        </div>
+        <span className="row-icon">{recordCount}</span>
+      </div>
+      <div className="compact-field-grid">
+        {module.fields.slice(0, 6).map((field) => (
+          <label className="field" key={field.key}>
+            <span>{field.label}</span>
+            {field.type === "select" ? (
+              <select className="select" name={field.key} required={field.required}>
+                {field.options?.map((option) => <option key={option}>{option}</option>)}
+              </select>
+            ) : (
+              <input
+                className="input"
+                list={["person", "manager", "approver", "reviewer"].includes(field.key) ? "employee-options-enterprise" : undefined}
+                name={field.key}
+                required={field.required}
+                type={field.type === "number" || field.type === "date" || field.type === "email" ? field.type : "text"}
+              />
+            )}
+          </label>
+        ))}
+      </div>
+      <button className="primary-button" type="submit">Add {module.label}</button>
+    </form>
+  );
+}
+
+function ReportRow({
+  businessId,
+  dataset,
+  groupBy,
+  name
+}: {
+  businessId: string;
+  dataset: string;
+  groupBy: string;
+  name: string;
+}) {
+  const query = `dataset=${encodeURIComponent(dataset)}&groupBy=${encodeURIComponent(groupBy)}`;
+  return (
+    <div className="record-card">
+      <div>
+        <p className="row-title">{name}</p>
+        <p className="row-subtitle">{dataset} grouped by {groupBy}</p>
+      </div>
+      <div className="record-actions">
+        <a className="secondary-button" href={`/api/businesses/${businessId}/reports/export?${query}&format=csv`}>CSV</a>
+        <a className="secondary-button" href={`/api/businesses/${businessId}/reports/export?${query}&format=pdf`}>PDF</a>
       </div>
     </div>
   );
