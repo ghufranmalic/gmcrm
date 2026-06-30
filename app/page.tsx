@@ -93,6 +93,8 @@ type BusinessWorkspace = Workspace & {
   packageName: "Starter" | "Professional" | "Enterprise";
   hosting: "Default subdomain" | "Custom domain" | "Client hosted";
   domain: string;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 type AppData = {
@@ -624,8 +626,18 @@ export default function Home() {
   const [view, setView] = useState<"parent" | "dashboard">("parent");
   const [mode, setMode] = useState<PortalMode>("admin");
   const [query, setQuery] = useState("");
+  const [databaseEnabled, setDatabaseEnabled] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
-  const currentBusiness = data.businesses.find((business) => business.id === data.currentBusinessId) ?? data.businesses[0];
+  const currentBusiness =
+    data.businesses.find((business) => business.id === data.currentBusinessId) ??
+    data.businesses[0] ??
+    createBusinessWorkspace({
+      businessName: "New HR Business",
+      hosting: "Default subdomain",
+      industryKey: "hr",
+      packageName: "Starter"
+    });
   const industryKey = currentBusiness.industryKey;
   const config = configs[industryKey];
   const workspaceData = currentBusiness;
@@ -635,12 +647,70 @@ export default function Home() {
   const selectedPersonName = String(primaryRecords[0]?.name ?? primaryRecords[0]?.person ?? "");
 
   useEffect(() => {
-    setData(loadData());
+    let mounted = true;
+
+    async function load() {
+      const localData = loadData();
+      setData(localData);
+
+      try {
+        const response = await fetch("/api/businesses", { cache: "no-store" });
+        const result = (await response.json()) as {
+          businesses?: BusinessWorkspace[];
+          databaseConfigured?: boolean;
+        };
+
+        if (!mounted || !result.databaseConfigured) {
+          return;
+        }
+
+        setDatabaseEnabled(true);
+        const businesses = result.businesses ?? [];
+        setData({
+          businesses,
+          currentBusinessId: businesses[0]?.id ?? ""
+        });
+      } catch {
+        setDatabaseEnabled(false);
+      }
+    }
+
+    void load();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   useEffect(() => {
-    window.localStorage.setItem(storageKey, JSON.stringify(data));
-  }, [data]);
+    if (!databaseEnabled) {
+      window.localStorage.setItem(storageKey, JSON.stringify(data));
+    }
+  }, [data, databaseEnabled]);
+
+  async function persistBusiness(next: BusinessWorkspace) {
+    if (!databaseEnabled) {
+      return next;
+    }
+
+    setIsSyncing(true);
+    try {
+      const response = await fetch(`/api/businesses/${next.id}`, {
+        body: JSON.stringify(next),
+        headers: { "Content-Type": "application/json" },
+        method: "PATCH"
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to sync business");
+      }
+
+      const result = (await response.json()) as { business: BusinessWorkspace };
+      return result.business;
+    } finally {
+      setIsSyncing(false);
+    }
+  }
 
   function openBusiness(businessId: string) {
     const business = data.businesses.find((item) => item.id === businessId) ?? data.businesses[0];
@@ -651,7 +721,7 @@ export default function Home() {
     setView("dashboard");
   }
 
-  function createBusiness(event: FormEvent<HTMLFormElement>) {
+  async function createBusiness(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const nextBusiness = createBusinessWorkspace({
@@ -662,11 +732,32 @@ export default function Home() {
       packageName: String(form.get("packageName") ?? "Professional") as BusinessWorkspace["packageName"]
     });
 
+    let savedBusiness = nextBusiness;
+    if (databaseEnabled) {
+      setIsSyncing(true);
+      try {
+        const response = await fetch("/api/businesses", {
+          body: JSON.stringify(nextBusiness),
+          headers: { "Content-Type": "application/json" },
+          method: "POST"
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to create business");
+        }
+
+        const result = (await response.json()) as { business: BusinessWorkspace };
+        savedBusiness = result.business;
+      } finally {
+        setIsSyncing(false);
+      }
+    }
+
     setData({
-      businesses: [nextBusiness, ...data.businesses],
-      currentBusinessId: nextBusiness.id
+      businesses: [savedBusiness, ...data.businesses],
+      currentBusinessId: savedBusiness.id
     });
-    setActiveModuleKey(configs[nextBusiness.industryKey].primaryModule);
+    setActiveModuleKey(configs[savedBusiness.industryKey].primaryModule);
     setMode("admin");
     setQuery("");
     setView("dashboard");
@@ -684,6 +775,12 @@ export default function Home() {
       ...data,
       businesses: data.businesses.map((business) => (business.id === currentBusiness.id ? next : business))
     });
+    void persistBusiness(next).then((savedBusiness) => {
+      setData((current) => ({
+        ...current,
+        businesses: current.businesses.map((business) => (business.id === savedBusiness.id ? savedBusiness : business))
+      }));
+    }).catch(() => setDatabaseEnabled(false));
   }
 
   function notify(channel: Channel, message: string) {
@@ -781,6 +878,10 @@ export default function Home() {
             </div>
           </div>
           <div className="top-actions">
+            <span className="status-pill">
+              <Bell size={14} />
+              {databaseEnabled ? (isSyncing ? "Syncing" : "Postgres") : "Local demo"}
+            </span>
             <span className="status-pill">
               <LayoutDashboard size={14} />
               {data.businesses.length} dashboards
@@ -893,6 +994,10 @@ export default function Home() {
           </div>
         </div>
         <div className="top-actions">
+          <span className="status-pill">
+            <Bell size={14} />
+            {databaseEnabled ? (isSyncing ? "Syncing" : "Postgres") : "Local demo"}
+          </span>
           <button className="secondary-button" onClick={() => setView("parent")}>
             <LayoutDashboard size={16} />
             Parent
@@ -1191,7 +1296,7 @@ function RecordList({
           .map((field) => readable(record[field.key]))
           .filter(Boolean)
           .slice(0, 4)
-          .join(" · ");
+          .join(" / ");
 
         return (
           <div className="record-card" key={record.id}>
@@ -1298,7 +1403,7 @@ function NotificationList({ notifications }: { notifications: Workspace["notific
           <div>
             <p className="row-title">{notification.message}</p>
             <p className="row-subtitle">
-              {notification.channel} · {notification.createdAt}
+              {notification.channel} / {notification.createdAt}
             </p>
           </div>
         </div>

@@ -1,0 +1,45 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum IndustryKey {
+  hr
+  gym
+  school
+  restaurant
+}
+
+enum PackageName {
+  Starter
+  Professional
+  Enterprise
+}
+
+enum HostingMode {
+  DEFAULT_SUBDOMAIN
+  CUSTOM_DOMAIN
+  CLIENT_HOSTED
+}
+
+model Business {
+  id            String      @id @default(cuid())
+  industryKey   IndustryKey
+  businessName  String
+  accent        String
+  packageName   PackageName @default(Professional)
+  hosting       HostingMode @default(DEFAULT_SUBDOMAIN)
+  domain        String
+  records       Json
+  notifications Json
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([industryKey])
+  @@index([domain])
+  @@index([updatedAt])
+}
