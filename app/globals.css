@@ -19,6 +19,7 @@
 
 html {
   min-width: 320px;
+  scroll-behavior: smooth;
 }
 
 body {
@@ -971,7 +972,132 @@ button {
 }
 
 .portal-auth-hero {
-  margin-bottom: 18px;
+  margin: 0 0 18px;
+}
+
+.portal-workspace {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 18px;
+  padding: 20px clamp(18px, 4vw, 44px) 44px;
+}
+
+.portal-sidebar {
+  position: sticky;
+  top: 86px;
+  display: grid;
+  align-self: start;
+  gap: 12px;
+  max-height: calc(100vh - 104px);
+  overflow: auto;
+}
+
+.sidebar-card,
+.sidebar-nav {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: var(--shadow);
+}
+
+.sidebar-card {
+  padding: 14px;
+}
+
+.sidebar-nav {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+}
+
+.sidebar-nav a {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+  border-radius: 7px;
+  color: var(--muted);
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.sidebar-nav a:hover,
+.sidebar-nav a:focus-visible {
+  background: color-mix(in srgb, var(--accent) 10%, #ffffff);
+  color: var(--accent);
+  outline: none;
+}
+
+.portal-content {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+
+.portal-content .business-board {
+  display: none;
+}
+
+.portal-content .business-board.default-panel {
+  display: block;
+}
+
+.portal-content:has(.business-board:target) .business-board {
+  display: none;
+}
+
+.portal-content:has(.business-board:target) .business-board:target {
+  display: block;
+}
+
+.portal-content .business-board {
+  margin: 0;
+}
+
+.portal-content > section {
+  scroll-margin-top: 92px;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.settings-card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+}
+
+.settings-value {
+  margin: 10px 0 0;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 850;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.brand-color-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.brand-color-dot {
+  width: 18px;
+  height: 18px;
+  border: 1px solid rgba(23, 32, 28, 0.18);
+  border-radius: 999px;
+  background: var(--accent);
 }
 
 .portal-top {
@@ -1272,13 +1398,33 @@ button {
   .employee-layout,
   .employee-profile,
   .dashboard-grid,
-  .dashboard-grid.wide-left {
+  .dashboard-grid.wide-left,
+  .portal-workspace,
+  .settings-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .hr-sidebar,
-  .employee-login {
+  .employee-login,
+  .portal-sidebar {
     position: static;
+  }
+
+  .portal-sidebar {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .sidebar-card {
+    display: none;
+  }
+
+  .sidebar-nav {
+    grid-auto-flow: column;
+    grid-auto-columns: max-content;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    box-shadow: none;
   }
 
   .nav-list {
@@ -1344,7 +1490,16 @@ button {
     padding-inline: 0;
   }
 
+  .portal-workspace {
+    padding: 14px;
+  }
+
+  .portal-content {
+    gap: 14px;
+  }
+
   .hr-hero {
+    margin-inline: 0;
     padding: 22px;
   }
 

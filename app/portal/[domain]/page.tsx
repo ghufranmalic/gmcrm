@@ -466,14 +466,47 @@ export default async function BusinessPortalPage({ params }: PortalPageProps) {
             </p>
           </div>
         </div>
-        <form action={logout}>
-          <button className="secondary-button" type="submit">
-            Sign out
-          </button>
-        </form>
+        <div className="top-actions">
+          <a className="secondary-button" href="#settings">Settings</a>
+          <form action={logout}>
+            <button className="secondary-button" type="submit">
+              Sign out
+            </button>
+          </form>
+        </div>
       </header>
 
-      <section className="hr-hero portal-auth-hero">
+      <div className="portal-workspace">
+        <aside className="portal-sidebar">
+          <div className="sidebar-card">
+            <div className="tenant-badge">
+              <div className="tenant-logo">{business.businessName.slice(0, 2).toUpperCase()}</div>
+              <div>
+                <p className="tenant-name">{business.businessName}</p>
+                <p className="tenant-url">{business.domain}</p>
+              </div>
+            </div>
+          </div>
+          <nav className="sidebar-nav" aria-label="Business portal sections">
+            <a href="#overview">Overview</a>
+            {canManageUsers ? <a href="#users">Users</a> : <a href="#my-portal">My Portal</a>}
+            {canManageUsers && business.industryKey === "hr" ? (
+              <>
+                <a href="#command-center">Command Center</a>
+                <a href="#hr-suite">HR Suite</a>
+                <a href="#reports">Reports</a>
+                <a href="#automations">Automations</a>
+                <a href="#hr-services">Services</a>
+              </>
+            ) : null}
+            <a href="#summary">Summary</a>
+            <a href="#settings">Settings</a>
+            <a href="#notifications">Notifications</a>
+          </nav>
+        </aside>
+
+        <div className="portal-content">
+      <section className="hr-hero portal-auth-hero" id="overview">
         <div>
           <p className="eyebrow">Authenticated business portal</p>
           <h1>{business.businessName}</h1>
@@ -493,7 +526,7 @@ export default async function BusinessPortalPage({ params }: PortalPageProps) {
       </section>
 
       {canManageUsers ? (
-        <section className="business-board">
+        <section className="business-board default-panel" id="users">
           <div className="section-header">
             <div>
               <h2 className="section-title">User Management</h2>
@@ -554,7 +587,7 @@ export default async function BusinessPortalPage({ params }: PortalPageProps) {
           </div>
         </section>
       ) : (
-        <section className="business-board">
+        <section className="business-board default-panel" id="my-portal">
           <div className="section-header">
             <div>
               <h2 className="section-title">My Portal</h2>
@@ -577,7 +610,7 @@ export default async function BusinessPortalPage({ params }: PortalPageProps) {
       )}
 
       {canManageUsers && business.industryKey === "hr" ? (
-        <section className="business-board">
+        <section className="business-board" id="command-center">
           <div className="section-header">
             <div>
               <h2 className="section-title">HR Command Center</h2>
@@ -609,7 +642,7 @@ export default async function BusinessPortalPage({ params }: PortalPageProps) {
       ) : null}
 
       {canManageUsers && business.industryKey === "hr" ? (
-        <section className="business-board">
+        <section className="business-board" id="hr-suite">
           <div className="section-header">
             <div>
               <h2 className="section-title">World-Class HR Services</h2>
@@ -640,7 +673,7 @@ export default async function BusinessPortalPage({ params }: PortalPageProps) {
       ) : null}
 
       {canManageUsers && business.industryKey === "hr" ? (
-        <section className="business-board">
+        <section className="business-board" id="reports">
           <div className="section-header">
             <div>
               <h2 className="section-title">Reporting Engine</h2>
@@ -721,7 +754,7 @@ export default async function BusinessPortalPage({ params }: PortalPageProps) {
       ) : null}
 
       {canManageUsers && business.industryKey === "hr" ? (
-        <section className="business-board">
+        <section className="business-board" id="automations">
           <div className="section-header">
             <div>
               <h2 className="section-title">Notification Automation</h2>
@@ -777,7 +810,7 @@ export default async function BusinessPortalPage({ params }: PortalPageProps) {
       ) : null}
 
       {canManageUsers && business.industryKey === "hr" ? (
-        <section className="business-board">
+        <section className="business-board" id="hr-services">
           <div className="section-header">
             <div>
               <h2 className="section-title">HR Services</h2>
@@ -935,7 +968,7 @@ export default async function BusinessPortalPage({ params }: PortalPageProps) {
         </section>
       ) : null}
 
-      <section className="business-board">
+      <section className="business-board" id="summary">
         <div className="section-header">
           <div>
             <h2 className="section-title">Workspace Summary</h2>
@@ -956,7 +989,41 @@ export default async function BusinessPortalPage({ params }: PortalPageProps) {
         </div>
       </section>
 
-      <section className="business-board">
+      <section className="business-board" id="settings">
+        <div className="section-header">
+          <div>
+            <h2 className="section-title">Workspace Settings</h2>
+            <p className="section-copy">Branding, access, hosting, package, and enabled service overview for this tenant.</p>
+          </div>
+        </div>
+        <div className="settings-grid">
+          <div className="settings-card">
+            <p className="row-title">Access</p>
+            <p className="row-subtitle">Login URL</p>
+            <p className="settings-value">{loginUrl}</p>
+          </div>
+          <div className="settings-card">
+            <p className="row-title">Brand</p>
+            <p className="row-subtitle">Accent color</p>
+            <div className="brand-color-row">
+              <span className="brand-color-dot" />
+              <span>{business.accent}</span>
+            </div>
+          </div>
+          <div className="settings-card">
+            <p className="row-title">Subscription</p>
+            <p className="row-subtitle">Package and hosting</p>
+            <p className="settings-value">{business.packageName} / {business.hosting}</p>
+          </div>
+          <div className="settings-card">
+            <p className="row-title">Enabled Modules</p>
+            <p className="row-subtitle">Controlled by parent plan</p>
+            <p className="settings-value">{moduleStats.length} services active</p>
+          </div>
+        </div>
+      </section>
+
+      <section className="business-board" id="notifications">
         <div className="section-header">
           <div>
             <h2 className="section-title">Recent Notifications</h2>
@@ -977,6 +1044,8 @@ export default async function BusinessPortalPage({ params }: PortalPageProps) {
           ))}
         </div>
       </section>
+        </div>
+      </div>
     </main>
   );
 }
