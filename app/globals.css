@@ -926,6 +926,10 @@ button {
   cursor: default;
 }
 
+.no-shadow-section {
+  box-shadow: none;
+}
+
 .login-page {
   display: grid;
   min-height: 100vh;

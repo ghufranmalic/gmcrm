@@ -89,6 +89,20 @@ After login, the owner is sent to:
 
 The protected portal currently shows the authenticated business summary, module counts, and notifications. The next production step is moving the full editable dashboard experience from the parent-controlled UI into this authenticated route.
 
+Owners and admins can manage user logins from the protected portal:
+
+1. Open `/portal/[domain]/login`.
+2. Sign in as the business owner.
+3. Use **User Management** to create admin, staff, or client logins.
+4. Give those users the same login link: `/portal/[domain]/login`.
+
+Industry client roles map like this:
+
+- HR: Employee
+- Gym: Member
+- School: Parent / Student
+- Restaurant: Customer
+
 ## Architecture
 
 The MVP uses a hybrid scalable model:

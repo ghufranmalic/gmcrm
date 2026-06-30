@@ -46,7 +46,7 @@ export default function BusinessLoginPage() {
         </div>
         <p className="eyebrow">Business portal login</p>
         <h1>{params.domain}</h1>
-        <p>Sign in with the owner credentials created from the parent dashboard.</p>
+        <p>Owners, staff, employees, members, parents, students, and customers sign in here.</p>
         <form className="form-grid" onSubmit={login}>
           <label className="field">
             <span>Email</span>
