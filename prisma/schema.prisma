@@ -26,6 +26,13 @@ enum HostingMode {
   CLIENT_HOSTED
 }
 
+enum UserRole {
+  OWNER
+  ADMIN
+  STAFF
+  CLIENT
+}
+
 model Business {
   id            String      @id @default(cuid())
   industryKey   IndustryKey
@@ -33,13 +40,42 @@ model Business {
   accent        String
   packageName   PackageName @default(Professional)
   hosting       HostingMode @default(DEFAULT_SUBDOMAIN)
-  domain        String
+  domain        String      @unique
   records       Json
   notifications Json
+  users         User[]
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
   @@index([industryKey])
-  @@index([domain])
   @@index([updatedAt])
+}
+
+model User {
+  id           String    @id @default(cuid())
+  businessId   String
+  business     Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  email        String
+  name         String
+  role         UserRole  @default(CLIENT)
+  passwordHash String
+  sessions     Session[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([businessId, email])
+  @@index([email])
+  @@index([businessId, role])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }

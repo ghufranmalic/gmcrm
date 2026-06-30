@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { hashPassword } from "@/lib/auth";
 import { toClientBusiness, toDbHosting, type BusinessPayload } from "@/lib/business-mappers";
 import { isDatabaseConfigured, prisma } from "@/lib/prisma";
 
@@ -24,6 +25,10 @@ export async function POST(request: Request) {
 
   const payload = (await request.json()) as BusinessPayload;
 
+  if (!payload.ownerEmail || !payload.ownerPassword) {
+    return NextResponse.json({ error: "Owner email and password are required." }, { status: 400 });
+  }
+
   const business = await prisma.business.create({
     data: {
       accent: payload.accent,
@@ -33,7 +38,15 @@ export async function POST(request: Request) {
       industryKey: payload.industryKey,
       notifications: payload.notifications,
       packageName: payload.packageName,
-      records: payload.records
+      records: payload.records,
+      users: {
+        create: {
+          email: payload.ownerEmail.toLowerCase(),
+          name: payload.ownerName || "Business Owner",
+          passwordHash: hashPassword(payload.ownerPassword),
+          role: "OWNER"
+        }
+      }
     }
   });
 

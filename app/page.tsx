@@ -737,7 +737,12 @@ export default function Home() {
       setIsSyncing(true);
       try {
         const response = await fetch("/api/businesses", {
-          body: JSON.stringify(nextBusiness),
+          body: JSON.stringify({
+            ...nextBusiness,
+            ownerEmail: String(form.get("ownerEmail") ?? ""),
+            ownerName: String(form.get("ownerName") ?? "Business Owner"),
+            ownerPassword: String(form.get("ownerPassword") ?? "")
+          }),
           headers: { "Content-Type": "application/json" },
           method: "POST"
         });
@@ -936,6 +941,18 @@ export default function Home() {
               <span>Domain or subdomain</span>
               <input className="input" name="domain" placeholder="business-name or portal.business.com" />
             </label>
+            <label className="field">
+              <span>Owner name</span>
+              <input className="input" name="ownerName" placeholder="Business owner" required />
+            </label>
+            <label className="field">
+              <span>Owner login email</span>
+              <input className="input" name="ownerEmail" placeholder="owner@business.com" required type="email" />
+            </label>
+            <label className="field">
+              <span>Owner password</span>
+              <input className="input" minLength={8} name="ownerPassword" placeholder="At least 8 characters" required type="password" />
+            </label>
             <button className="primary-button" type="submit">
               <Plus size={16} />
               Create dashboard
@@ -968,8 +985,11 @@ export default function Home() {
                   <p>{businessConfig.name} / {business.hosting}</p>
                   <div className="business-meta">
                     <span>{totalRecords} records</span>
-                    <span>{business.domain || slugify(business.businessName)}.gmcrm.app</span>
+                    <span>/portal/{business.domain || slugify(business.businessName)}</span>
                   </div>
+                  <a className="secondary-button" href={`/portal/${business.domain || slugify(business.businessName)}/login`}>
+                    Owner login
+                  </a>
                   <button className="primary-button" onClick={() => openBusiness(business.id)}>
                     <LayoutDashboard size={16} />
                     Open dashboard

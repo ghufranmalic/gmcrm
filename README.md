@@ -5,6 +5,8 @@ A lightweight multi-industry CRM portal builder for HR teams, gyms, schools, and
 ## What Works
 
 - Parent dashboard to create multiple business dashboards
+- Business owner credentials at dashboard creation
+- Protected business login routes at `/portal/[domain]/login`
 - Industry templates for HR, Gym, School, and Restaurant
 - Business-level branding, package, hosting mode, and domain
 - Admin and client/member/customer/employee portal modes
@@ -57,6 +59,36 @@ Open `http://127.0.0.1:3000`.
 - If no database is configured, the app falls back to browser local storage for demo use.
 - The header shows `Postgres`, `Syncing`, or `Local demo` so you know where data is saving.
 
+## Business Login Flow
+
+When a business dashboard is created with Postgres enabled, the parent form also asks for:
+
+- Owner name
+- Owner login email
+- Owner password
+
+The app stores the owner password as a salted hash. It does not store plain text passwords.
+
+Each business gets a login route:
+
+```text
+/portal/[domain]/login
+```
+
+Example:
+
+```text
+/portal/green-leaf-gym/login
+```
+
+After login, the owner is sent to:
+
+```text
+/portal/[domain]
+```
+
+The protected portal currently shows the authenticated business summary, module counts, and notifications. The next production step is moving the full editable dashboard experience from the parent-controlled UI into this authenticated route.
+
 ## Architecture
 
 The MVP uses a hybrid scalable model:
@@ -71,6 +103,7 @@ This keeps the first version fast to build and easy to sell. As usage grows, hig
 Recommended scaling path:
 
 - Add authentication and tenant membership tables.
+- Add user invite, password reset, and email verification flows.
 - Add subscription and billing tables.
 - Move high-volume records into module tables when needed.
 - Add background jobs for WhatsApp/SMS/email sending.

@@ -24,6 +24,9 @@ export type BusinessPayload = {
   domain: string;
   records: Prisma.InputJsonValue;
   notifications: Prisma.InputJsonValue;
+  ownerEmail?: string;
+  ownerName?: string;
+  ownerPassword?: string;
 };
 
 export function toClientBusiness(business: Business) {
