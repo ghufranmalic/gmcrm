@@ -87,7 +87,18 @@ type Workspace = {
   }>;
 };
 
-type AppData = Record<IndustryKey, Workspace>;
+type BusinessWorkspace = Workspace & {
+  id: string;
+  industryKey: IndustryKey;
+  packageName: "Starter" | "Professional" | "Enterprise";
+  hosting: "Default subdomain" | "Custom domain" | "Client hosted";
+  domain: string;
+};
+
+type AppData = {
+  businesses: BusinessWorkspace[];
+  currentBusinessId: string;
+};
 
 const storageKey = "gmcrm-multi-industry-v1";
 const today = new Date().toISOString().slice(0, 10);
@@ -473,8 +484,8 @@ const configs: Record<IndustryKey, IndustryConfig> = {
   }
 };
 
-const starterData: AppData = {
-  hr: workspace("Northstar People Co.", "#0f766e", {
+const starterBusinesses: BusinessWorkspace[] = [
+  businessWorkspace("biz-hr", "hr", "Northstar People Co.", "#0f766e", {
     employees: [
       item({ name: "Amina Khan", email: "amina@northstar.test", department: "Operations", title: "Operations Lead", manager: "Ghufran Malik", leaveBalance: "16" }),
       item({ name: "Omar Siddiq", email: "omar@northstar.test", department: "Sales", title: "Account Executive", manager: "Amina Khan", leaveBalance: "9" })
@@ -484,7 +495,7 @@ const starterData: AppData = {
     policies: [item({ title: "Annual Leave Policy", category: "Leave", acknowledged: "1" })],
     warnings: [item({ person: "Omar Siddiq", severity: "Low", reason: "Late onboarding documents", visible: true })]
   }),
-  gym: workspace("PulseFit Studio", "#c2410c", {
+  businessWorkspace("biz-gym", "gym", "PulseFit Studio", "#c2410c", {
     members: [
       item({ name: "Bilal Ahmed", email: "bilal@pulsefit.test", phone: "0300-111222", package: "Premium", trainer: "Nadia Ali", renewalDate: "2026-07-15" }),
       item({ name: "Mehak Noor", email: "mehak@pulsefit.test", phone: "0300-333444", package: "Plus", trainer: "Usman Tariq", renewalDate: "2026-07-05" })
@@ -494,7 +505,7 @@ const starterData: AppData = {
     workoutPlans: [item({ person: "Bilal Ahmed", trainer: "Nadia Ali", goal: "Muscle gain", plan: "Push/pull split with high protein diet" })],
     memberRequests: [item({ person: "Mehak Noor", topic: "Trainer", message: "Need a morning training slot", status: "Open" })]
   }),
-  school: workspace("BrightPath School", "#1d4ed8", {
+  businessWorkspace("biz-school", "school", "BrightPath School", "#1d4ed8", {
     students: [
       item({ name: "Zoya Hassan", className: "Grade 5", parent: "Mrs Hassan", phone: "0300-555111", status: "Active" }),
       item({ name: "Ali Raza", className: "Grade 7", parent: "Mr Raza", phone: "0300-555222", status: "Active" })
@@ -505,7 +516,7 @@ const starterData: AppData = {
     notices: [item({ title: "Parent Meeting", audience: "Parents", message: "Meeting scheduled for Friday." })],
     complaints: [item({ person: "Mrs Hassan", topic: "Class", message: "Need timetable clarification", status: "Open" })]
   }),
-  restaurant: workspace("Olive Table Cafe", "#4d7c0f", {
+  businessWorkspace("biz-restaurant", "restaurant", "Olive Table Cafe", "#4d7c0f", {
     customers: [
       item({ name: "Danish Iqbal", phone: "0300-909090", email: "danish@olive.test", loyalty: "VIP" }),
       item({ name: "Mariam Shah", phone: "0300-808080", email: "mariam@olive.test", loyalty: "Regular" })
@@ -516,12 +527,28 @@ const starterData: AppData = {
     orders: [item({ person: "Danish Iqbal", items: "2 burgers, 1 fries", type: "Pickup", total: "2800", status: "Preparing" })],
     feedback: [item({ person: "Danish Iqbal", rating: "5", message: "Great service", status: "New" })]
   })
+];
+
+const starterData: AppData = {
+  businesses: starterBusinesses,
+  currentBusinessId: starterBusinesses[0].id
 };
 
-function workspace(businessName: string, accent: string, records: Record<string, RecordItem[]>): Workspace {
+function businessWorkspace(
+  id: string,
+  industryKey: IndustryKey,
+  businessName: string,
+  accent: string,
+  records: Record<string, RecordItem[]>
+): BusinessWorkspace {
   return {
+    id,
+    industryKey,
     businessName,
     accent,
+    packageName: "Professional",
+    hosting: "Default subdomain",
+    domain: slugify(businessName),
     records,
     notifications: [{ id: uid("notice"), channel: "Email", message: `${businessName} workspace ready`, createdAt: today }]
   };
@@ -535,11 +562,58 @@ function uid(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
+
+function emptyRecordsForIndustry(industryKey: IndustryKey) {
+  return Object.fromEntries(configs[industryKey].modules.map((module) => [module.key, [] as RecordItem[]]));
+}
+
+function createBusinessWorkspace(values: {
+  businessName: string;
+  domain?: string;
+  hosting: BusinessWorkspace["hosting"];
+  industryKey: IndustryKey;
+  packageName: BusinessWorkspace["packageName"];
+}): BusinessWorkspace {
+  const config = configs[values.industryKey];
+  const name = values.businessName.trim() || `New ${config.name}`;
+
+  return {
+    id: uid("biz"),
+    industryKey: values.industryKey,
+    businessName: name,
+    accent: config.accent,
+    packageName: values.packageName,
+    hosting: values.hosting,
+    domain: values.domain?.trim() || slugify(name),
+    records: emptyRecordsForIndustry(values.industryKey),
+    notifications: [{ id: uid("notice"), channel: "Email", message: `${name} dashboard created`, createdAt: today }]
+  };
+}
+
 function loadData(): AppData {
   if (typeof window === "undefined") return starterData;
   try {
     const stored = window.localStorage.getItem(storageKey);
-    return stored ? ({ ...starterData, ...JSON.parse(stored) } as AppData) : starterData;
+    if (!stored) return starterData;
+    const parsed = JSON.parse(stored) as AppData | Record<IndustryKey, Workspace>;
+
+    if ("businesses" in parsed && Array.isArray(parsed.businesses)) {
+      const businesses = parsed.businesses.length ? parsed.businesses : starterBusinesses;
+      return {
+        businesses,
+        currentBusinessId: businesses.some((business) => business.id === parsed.currentBusinessId)
+          ? parsed.currentBusinessId
+          : businesses[0].id
+      };
+    }
+
+    return starterData;
   } catch {
     return starterData;
   }
@@ -547,12 +621,14 @@ function loadData(): AppData {
 
 export default function Home() {
   const [data, setData] = useState<AppData>(starterData);
-  const [industryKey, setIndustryKey] = useState<IndustryKey>("hr");
+  const [view, setView] = useState<"parent" | "dashboard">("parent");
   const [mode, setMode] = useState<PortalMode>("admin");
   const [query, setQuery] = useState("");
 
+  const currentBusiness = data.businesses.find((business) => business.id === data.currentBusinessId) ?? data.businesses[0];
+  const industryKey = currentBusiness.industryKey;
   const config = configs[industryKey];
-  const workspaceData = data[industryKey];
+  const workspaceData = currentBusiness;
   const [activeModuleKey, setActiveModuleKey] = useState(config.primaryModule);
   const activeModule = config.modules.find((module) => module.key === activeModuleKey) ?? config.modules[0];
   const primaryRecords = workspaceData.records[config.primaryModule] ?? [];
@@ -566,11 +642,35 @@ export default function Home() {
     window.localStorage.setItem(storageKey, JSON.stringify(data));
   }, [data]);
 
-  function chooseIndustry(key: IndustryKey) {
-    setIndustryKey(key);
-    setActiveModuleKey(configs[key].primaryModule);
+  function openBusiness(businessId: string) {
+    const business = data.businesses.find((item) => item.id === businessId) ?? data.businesses[0];
+    setData({ ...data, currentBusinessId: business.id });
+    setActiveModuleKey(configs[business.industryKey].primaryModule);
     setMode("admin");
     setQuery("");
+    setView("dashboard");
+  }
+
+  function createBusiness(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const nextBusiness = createBusinessWorkspace({
+      businessName: String(form.get("businessName") ?? ""),
+      domain: String(form.get("domain") ?? ""),
+      hosting: String(form.get("hosting") ?? "Default subdomain") as BusinessWorkspace["hosting"],
+      industryKey: String(form.get("industryKey") ?? "hr") as IndustryKey,
+      packageName: String(form.get("packageName") ?? "Professional") as BusinessWorkspace["packageName"]
+    });
+
+    setData({
+      businesses: [nextBusiness, ...data.businesses],
+      currentBusinessId: nextBusiness.id
+    });
+    setActiveModuleKey(configs[nextBusiness.industryKey].primaryModule);
+    setMode("admin");
+    setQuery("");
+    setView("dashboard");
+    event.currentTarget.reset();
   }
 
   function chooseMode(nextMode: PortalMode) {
@@ -579,8 +679,11 @@ export default function Home() {
     setQuery("");
   }
 
-  function updateWorkspace(next: Workspace) {
-    setData({ ...data, [industryKey]: next });
+  function updateWorkspace(next: BusinessWorkspace) {
+    setData({
+      ...data,
+      businesses: data.businesses.map((business) => (business.id === currentBusiness.id ? next : business))
+    });
   }
 
   function notify(channel: Channel, message: string) {
@@ -650,9 +753,9 @@ export default function Home() {
   function resetDemo() {
     window.localStorage.removeItem(storageKey);
     setData(starterData);
-    setIndustryKey("hr");
     setMode("admin");
     setActiveModuleKey("employees");
+    setView("parent");
   }
 
   const metrics = config.modules.slice(0, 4).map((module) => ({
@@ -666,6 +769,119 @@ export default function Home() {
     return text.includes(query.toLowerCase());
   });
 
+  if (view === "parent") {
+    return (
+      <main className="app-shell parent-shell">
+        <header className="topbar">
+          <div className="brand">
+            <div className="brand-mark">GM</div>
+            <div>
+              <p className="brand-title">GM CRM Parent Dashboard</p>
+              <p className="brand-subtitle">Create and manage business dashboards</p>
+            </div>
+          </div>
+          <div className="top-actions">
+            <span className="status-pill">
+              <LayoutDashboard size={14} />
+              {data.businesses.length} dashboards
+            </span>
+            <button className="icon-button" onClick={resetDemo} aria-label="Reset demo data">
+              <Save size={17} />
+            </button>
+          </div>
+        </header>
+
+        <section className="parent-hero">
+          <div>
+            <p className="eyebrow">Parent admin</p>
+            <h1>Create a branded CRM dashboard for any business.</h1>
+            <p>
+              Select an industry, set package and hosting, then open the generated business portal with its own modules,
+              data, branding, and notification log.
+            </p>
+          </div>
+          <form className="create-business-form" onSubmit={createBusiness}>
+            <label className="field">
+              <span>Business name</span>
+              <input className="input" name="businessName" placeholder="Example: Green Leaf Gym" required />
+            </label>
+            <label className="field">
+              <span>Industry</span>
+              <select className="select" name="industryKey">
+                {Object.values(configs).map((industry) => (
+                  <option key={industry.key} value={industry.key}>
+                    {industry.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Package</span>
+              <select className="select" name="packageName" defaultValue="Professional">
+                <option>Starter</option>
+                <option>Professional</option>
+                <option>Enterprise</option>
+              </select>
+            </label>
+            <label className="field">
+              <span>Hosting</span>
+              <select className="select" name="hosting" defaultValue="Default subdomain">
+                <option>Default subdomain</option>
+                <option>Custom domain</option>
+                <option>Client hosted</option>
+              </select>
+            </label>
+            <label className="field">
+              <span>Domain or subdomain</span>
+              <input className="input" name="domain" placeholder="business-name or portal.business.com" />
+            </label>
+            <button className="primary-button" type="submit">
+              <Plus size={16} />
+              Create dashboard
+            </button>
+          </form>
+        </section>
+
+        <section className="business-board">
+          <div className="section-header">
+            <div>
+              <h2 className="section-title">Business Dashboards</h2>
+              <p className="section-copy">Open any business to manage its industry-specific CRM portal.</p>
+            </div>
+          </div>
+          <div className="business-grid">
+            {data.businesses.map((business) => {
+              const businessConfig = configs[business.industryKey];
+              const Icon = businessConfig.icon;
+              const totalRecords = Object.values(business.records).reduce((total, list) => total + list.length, 0);
+
+              return (
+                <article className="business-card" key={business.id} style={{ "--accent": business.accent } as CSSProperties}>
+                  <div className="business-card-top">
+                    <span className="row-icon">
+                      <Icon size={17} />
+                    </span>
+                    <span className="mini-pill">{business.packageName}</span>
+                  </div>
+                  <h3>{business.businessName}</h3>
+                  <p>{businessConfig.name} / {business.hosting}</p>
+                  <div className="business-meta">
+                    <span>{totalRecords} records</span>
+                    <span>{business.domain || slugify(business.businessName)}.gmcrm.app</span>
+                  </div>
+                  <button className="primary-button" onClick={() => openBusiness(business.id)}>
+                    <LayoutDashboard size={16} />
+                    Open dashboard
+                  </button>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="app-shell hr-shell" style={{ "--accent": workspaceData.accent } as CSSProperties}>
       <header className="topbar">
@@ -677,10 +893,14 @@ export default function Home() {
           </div>
         </div>
         <div className="top-actions">
-          <select className="select compact-select" value={industryKey} onChange={(event) => chooseIndustry(event.target.value as IndustryKey)}>
-            {Object.values(configs).map((industry) => (
-              <option key={industry.key} value={industry.key}>
-                {industry.name}
+          <button className="secondary-button" onClick={() => setView("parent")}>
+            <LayoutDashboard size={16} />
+            Parent
+          </button>
+          <select className="select compact-select" value={currentBusiness.id} onChange={(event) => openBusiness(event.target.value)}>
+            {data.businesses.map((business) => (
+              <option key={business.id} value={business.id}>
+                {business.businessName}
               </option>
             ))}
           </select>
@@ -714,6 +934,39 @@ export default function Home() {
             value={workspaceData.businessName}
             onChange={(event) => updateWorkspace({ ...workspaceData, businessName: event.target.value })}
           />
+          <label htmlFor="businessPackage">Package</label>
+          <select
+            id="businessPackage"
+            className="select"
+            value={workspaceData.packageName}
+            onChange={(event) =>
+              updateWorkspace({ ...workspaceData, packageName: event.target.value as BusinessWorkspace["packageName"] })
+            }
+          >
+            <option>Starter</option>
+            <option>Professional</option>
+            <option>Enterprise</option>
+          </select>
+          <label htmlFor="businessHosting">Hosting</label>
+          <select
+            id="businessHosting"
+            className="select"
+            value={workspaceData.hosting}
+            onChange={(event) =>
+              updateWorkspace({ ...workspaceData, hosting: event.target.value as BusinessWorkspace["hosting"] })
+            }
+          >
+            <option>Default subdomain</option>
+            <option>Custom domain</option>
+            <option>Client hosted</option>
+          </select>
+          <label htmlFor="businessDomain">Domain</label>
+          <input
+            id="businessDomain"
+            className="input"
+            value={workspaceData.domain}
+            onChange={(event) => updateWorkspace({ ...workspaceData, domain: event.target.value })}
+          />
           <div className="color-row">
             {colorOptions.map((color) => (
               <button
@@ -738,7 +991,7 @@ export default function Home() {
                 : `Submit requests and view active ${config.name.toLowerCase()} records.`}
             </p>
           </div>
-          <IndustryCards active={industryKey} onChoose={chooseIndustry} />
+          <BusinessCards businesses={data.businesses} active={currentBusiness.id} onChoose={openBusiness} />
           <nav className="nav-list" aria-label="Portal modules">
             {(mode === "admin" ? config.modules : config.modules.filter((module) => config.clientModules.includes(module.key))).map((module) => {
               const Icon = module.icon;
@@ -825,20 +1078,29 @@ export default function Home() {
   );
 }
 
-function IndustryCards({ active, onChoose }: { active: IndustryKey; onChoose: (key: IndustryKey) => void }) {
+function BusinessCards({
+  active,
+  businesses,
+  onChoose
+}: {
+  active: string;
+  businesses: BusinessWorkspace[];
+  onChoose: (id: string) => void;
+}) {
   return (
     <div className="industry-card-grid">
-      {Object.values(configs).map((industry) => {
+      {businesses.map((business) => {
+        const industry = configs[business.industryKey];
         const Icon = industry.icon;
         return (
           <button
-            key={industry.key}
-            className={active === industry.key ? "active" : ""}
-            onClick={() => onChoose(industry.key)}
-            style={{ "--accent": industry.accent } as CSSProperties}
+            key={business.id}
+            className={active === business.id ? "active" : ""}
+            onClick={() => onChoose(business.id)}
+            style={{ "--accent": business.accent } as CSSProperties}
           >
             <Icon size={16} />
-            <span>{industry.name}</span>
+            <span>{business.businessName}</span>
           </button>
         );
       })}

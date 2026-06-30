@@ -468,6 +468,106 @@ button {
   color: var(--accent);
 }
 
+.parent-shell {
+  min-height: 100vh;
+}
+
+.parent-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+  gap: 20px;
+  margin: 24px clamp(18px, 4vw, 44px) 0;
+  padding: clamp(24px, 4vw, 40px);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(23, 32, 28, 0.92), rgba(23, 32, 28, 0.72)),
+    #17201c;
+  color: #ffffff;
+  box-shadow: var(--shadow);
+}
+
+.parent-hero h1 {
+  max-width: 850px;
+  margin: 0;
+  font-size: clamp(36px, 5vw, 66px);
+  line-height: 0.98;
+  letter-spacing: 0;
+}
+
+.parent-hero p {
+  max-width: 690px;
+  margin: 18px 0 0;
+  color: rgba(255, 255, 255, 0.76);
+  line-height: 1.7;
+}
+
+.create-business-form {
+  display: grid;
+  gap: 12px;
+  align-self: start;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--ink);
+}
+
+.business-board {
+  margin: 18px clamp(18px, 4vw, 44px) 44px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: var(--shadow);
+}
+
+.business-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.business-card {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.business-card-top,
+.business-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.business-card h3 {
+  margin: 0;
+  overflow: hidden;
+  font-size: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.business-card p,
+.business-meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.business-meta {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
 .hr-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
@@ -1032,6 +1132,7 @@ button {
   }
 
   .hr-hero,
+  .parent-hero,
   .hr-layout,
   .employee-layout,
   .employee-profile,
@@ -1050,7 +1151,8 @@ button {
   }
 
   .industry-card-grid,
-  .client-action-grid {
+  .client-action-grid,
+  .business-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1094,6 +1196,7 @@ button {
   }
 
   .hr-hero,
+  .parent-hero,
   .hr-layout,
   .employee-layout {
     margin-inline: 14px;
@@ -1102,6 +1205,14 @@ button {
 
   .hr-hero {
     padding: 22px;
+  }
+
+  .parent-hero {
+    padding: 22px;
+  }
+
+  .business-board {
+    margin: 14px;
   }
 
   .hr-layout,
@@ -1120,7 +1231,8 @@ button {
   }
 
   .industry-card-grid,
-  .client-action-grid {
+  .client-action-grid,
+  .business-grid {
     grid-template-columns: 1fr;
   }
 
