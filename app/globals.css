@@ -434,6 +434,40 @@ button {
   color: #ffffff;
 }
 
+.compact-select {
+  width: auto;
+  min-width: 160px;
+  max-width: 220px;
+}
+
+.industry-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.industry-card-grid button {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 8px;
+  min-height: 76px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  padding: 12px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.industry-card-grid button.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, #ffffff);
+  color: var(--accent);
+}
+
 .hr-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
@@ -727,6 +761,31 @@ button {
   color: #ffffff;
 }
 
+.multi-client-profile {
+  align-items: center;
+}
+
+.client-action-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.client-action-grid button {
+  display: grid;
+  min-height: 112px;
+  place-items: center;
+  gap: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--ink);
+  padding: 12px;
+  font-size: 12px;
+  font-weight: 850;
+  text-align: center;
+}
+
 .employee-profile .metric {
   background: rgba(255, 255, 255, 0.96);
   color: var(--ink);
@@ -990,6 +1049,11 @@ button {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .industry-card-grid,
+  .client-action-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .hr-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1003,7 +1067,18 @@ button {
 
   .top-actions {
     width: 100%;
+    flex-wrap: wrap;
     justify-content: space-between;
+  }
+
+  .compact-select,
+  .role-switch {
+    width: 100%;
+  }
+
+  .role-switch button {
+    flex: 1;
+    justify-content: center;
   }
 
   .main-grid {
@@ -1041,6 +1116,11 @@ button {
   }
 
   .nav-list {
+    grid-template-columns: 1fr;
+  }
+
+  .industry-card-grid,
+  .client-action-grid {
     grid-template-columns: 1fr;
   }
 
