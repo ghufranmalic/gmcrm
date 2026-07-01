@@ -1,12 +1,24 @@
 import type { CSSProperties } from "react";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { BrandLogo } from "@/components/brand-logo";
+import { BusinessBrandMark } from "@/components/portal/business-brand-mark";
 import { Badge } from "@/components/ui/badge";
 import { getPublishedJob } from "@/lib/hr/recruitment";
 
 type PublicJobPageProps = {
   params: Promise<{ domain: string; jobId: string }>;
 };
+
+export async function generateMetadata({ params }: PublicJobPageProps): Promise<Metadata> {
+  const { domain, jobId } = await params;
+  const result = await getPublishedJob(domain, decodeURIComponent(jobId));
+  if (!result) return { title: "Job not found" };
+
+  return {
+    description: `${result.job.title} at ${result.business.brandName}`,
+    title: `${result.job.title} · ${result.business.brandName}`
+  };
+}
 
 export default async function PublicJobPage({ params }: PublicJobPageProps) {
   const { domain, jobId } = await params;
@@ -23,21 +35,31 @@ export default async function PublicJobPage({ params }: PublicJobPageProps) {
       <header className="border-b border-border bg-white">
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-4 px-4 py-5 sm:px-6">
           <div className="flex items-center gap-3">
-            <BrandLogo size={36} />
+            <BusinessBrandMark
+              accent={business.accent}
+              businessName={business.brandName}
+              logoUrl={business.logoUrl}
+              size={44}
+            />
             <div>
-              <p className="text-sm font-semibold">{business.businessName}</p>
+              <p className="text-sm font-semibold">{business.brandName}</p>
               <p className="text-xs text-muted-foreground">Careers</p>
             </div>
           </div>
-          <Badge variant="secondary">{job.jobId}</Badge>
+          <Badge style={{ borderColor: `${business.accent}33`, color: business.accent }} variant="outline">
+            {job.jobId}
+          </Badge>
         </div>
       </header>
 
       <div className="mx-auto max-w-4xl space-y-8 px-4 py-8 sm:px-6">
         <section className="space-y-3">
+          <p className="text-xs font-medium uppercase tracking-[0.2em]" style={{ color: business.accent }}>
+            {business.brandName}
+          </p>
           <h1 className="text-3xl font-semibold tracking-tight">{job.title}</h1>
           <div className="flex flex-wrap gap-2">
-            <Badge>{job.workPreference}</Badge>
+            <Badge style={{ backgroundColor: business.accent }}>{job.workPreference}</Badge>
             <Badge variant="outline">{job.jobType}</Badge>
             <Badge variant="outline">{job.location}</Badge>
             <Badge variant="outline">
@@ -120,7 +142,7 @@ export default async function PublicJobPage({ params }: PublicJobPageProps) {
         </section>
 
         <footer className="border-t border-border pt-6 text-center text-xs text-muted-foreground">
-          Powered by Dvibe · {business.businessName}
+          © {new Date().getFullYear()} {business.brandName}
         </footer>
       </div>
     </main>

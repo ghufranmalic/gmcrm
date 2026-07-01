@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { asRecordList } from "@/lib/hr-suite";
 import type {
   GENDER_OPTIONS,
   JOB_TYPES,
@@ -164,11 +165,18 @@ export async function getPublishedJob(domain: string, jobId: string) {
 
   if (!job) return null;
 
+  const branding = asRecordList(business.records, "brandingSettings")[0] ?? {};
+  const brandName = String(branding.brandName ?? business.businessName);
+  const accent = String(branding.accent ?? business.accent);
+  const logoUrl = String(branding.logoUrl ?? "");
+
   return {
     business: {
-      accent: business.accent,
+      accent,
+      brandName,
       businessName: business.businessName,
-      domain: business.domain
+      domain: business.domain,
+      logoUrl: logoUrl || undefined
     },
     job: normalizeJobPosting(job as unknown as Record<string, unknown>)
   };
