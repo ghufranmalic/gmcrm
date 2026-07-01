@@ -2,6 +2,7 @@ import type { Business } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import { asRecordList, type ModuleRecords } from "@/lib/hr-suite";
 import { defaultBenefitPlans } from "@/lib/hr/defaults";
+import { parseHrModules } from "@/lib/hr/modules";
 import { prisma } from "@/lib/prisma";
 
 const defaultLeaveTypes = [
@@ -136,6 +137,23 @@ export async function ensureHrDataMigrated(business: Pick<Business, "id" | "indu
   }
 
   await markHrInitialized(business.id, records);
+}
+
+export async function ensureHrModulesCurrent(business: Pick<Business, "hrModules" | "id" | "industryKey">) {
+  if (business.industryKey !== "hr") return;
+
+  const modules = parseHrModules(business.hrModules);
+  if (modules.recruitment) return;
+
+  await prisma.business.update({
+    data: {
+      hrModules: {
+        ...modules,
+        recruitment: true
+      } as Prisma.InputJsonValue
+    },
+    where: { id: business.id }
+  });
 }
 
 export async function ensureEmployeeForUser(input: {

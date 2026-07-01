@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { Prisma } from "@prisma/client";
 import { clearSessionCookie, getCurrentSession, hashPassword } from "@/lib/auth";
@@ -19,6 +20,13 @@ import { createPerformanceReview, updatePerformanceReview } from "@/lib/hr/perfo
 import { notifyUser, writeAuditLog } from "@/lib/hr/audit";
 import { canManageUsers } from "@/lib/hr/permissions";
 import { ensureEmployeeForUser } from "@/lib/hr/seed";
+import { createJobPosting, isJobIdTaken } from "@/lib/hr/recruitment";
+import type {
+  GENDER_OPTIONS,
+  JOB_TYPES,
+  SALARY_TYPES,
+  WORK_PREFERENCES
+} from "@/lib/hr/recruitment-presets";
 import { prisma } from "@/lib/prisma";
 
 export async function logoutAction(domain: string) {
@@ -441,4 +449,69 @@ export async function enrollBenefitAction(domain: string, formData: FormData) {
   });
 
   redirect(`/portal/${domain}/benefits`);
+}
+
+function parseJsonArray(value: FormDataEntryValue | null) {
+  const raw = String(value ?? "");
+  if (!raw) return [] as string[];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function publishJobAction(domain: string, formData: FormData) {
+  "use server";
+
+  const session = await getCurrentSession();
+  if (!session || session.user.business.domain !== domain) redirect(`/portal/${domain}/login`);
+
+  const business = await prisma.business.findUnique({ where: { domain } });
+  if (!business) redirect(`/portal/${domain}/recruitment`);
+
+  const intent = String(formData.get("intent") ?? "publish");
+  const jobId = String(formData.get("jobId") ?? "").trim();
+  const title = String(formData.get("title") ?? "").trim();
+
+  if (!jobId || !title) redirect(`/portal/${domain}/recruitment`);
+
+  if (await isJobIdTaken(business.id, jobId)) {
+    redirect(`/portal/${domain}/recruitment?error=job-id-taken`);
+  }
+
+  const job = await createJobPosting({
+    businessId: business.id,
+    job: {
+      benefits: parseJsonArray(formData.get("benefits")),
+      certifications: parseJsonArray(formData.get("certifications")),
+      closingDate: String(formData.get("closingDate") ?? ""),
+      currency: String(formData.get("currency") ?? "USD"),
+      description: String(formData.get("description") ?? ""),
+      education: String(formData.get("education") ?? ""),
+      experienceYears: Number(formData.get("experienceYears") ?? 0),
+      gender: String(formData.get("gender") ?? "All") as (typeof GENDER_OPTIONS)[number],
+      jobId,
+      jobType: String(formData.get("jobType") ?? "Permanent") as (typeof JOB_TYPES)[number],
+      location: String(formData.get("location") ?? ""),
+      openPositions: Number(formData.get("openPositions") ?? 1),
+      requirements: String(formData.get("requirements") ?? ""),
+      salary: String(formData.get("salary") ?? ""),
+      salaryType: String(formData.get("salaryType") ?? "Monthly") as (typeof SALARY_TYPES)[number],
+      skills: parseJsonArray(formData.get("skills")),
+      status: intent === "publish" ? "published" : "draft",
+      title,
+      workPreference: String(formData.get("workPreference") ?? "On-site") as (typeof WORK_PREFERENCES)[number]
+    }
+  });
+
+  if (job.status === "published") {
+    revalidatePath(`/portal/${domain}/recruitment`);
+    revalidatePath(`/portal/${domain}/jobs/${job.jobId}`);
+    redirect(`/portal/${domain}/jobs/${encodeURIComponent(job.jobId)}`);
+  }
+
+  revalidatePath(`/portal/${domain}/recruitment`);
+  redirect(`/portal/${domain}/recruitment`);
 }

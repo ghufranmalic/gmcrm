@@ -2,7 +2,8 @@ import type { Business, User } from "@prisma/client";
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth";
-import { ensureHrDataMigrated } from "@/lib/hr/seed";
+import { parseHrModules } from "@/lib/hr/modules";
+import { ensureHrDataMigrated, ensureHrModulesCurrent } from "@/lib/hr/seed";
 import { prisma } from "@/lib/prisma";
 
 const portalBusinessSelect = {
@@ -50,6 +51,15 @@ export const requirePortalContext = cache(async (domain: string) => {
 
   if (business.industryKey === "hr") {
     await ensureHrDataMigrated(business);
+    await ensureHrModulesCurrent(business);
+    business.hrModules = parseHrModules(
+      (
+        await prisma.business.findUnique({
+          select: { hrModules: true },
+          where: { id: business.id }
+        })
+      )?.hrModules ?? business.hrModules
+    ) as typeof business.hrModules;
   }
 
   const user: PortalUser = {

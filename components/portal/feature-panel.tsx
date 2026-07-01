@@ -10,13 +10,15 @@ export function FeaturePanel({
   description,
   onOpenChange,
   open,
-  title
+  title,
+  wide = false
 }: {
   children: ReactNode;
   description?: string;
   onOpenChange: (open: boolean) => void;
   open: boolean;
   title: string;
+  wide?: boolean;
 }) {
   return (
     <Dialog.Root onOpenChange={onOpenChange} open={open}>
@@ -24,7 +26,8 @@ export function FeaturePanel({
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm data-[state=open]:animate-in" />
         <Dialog.Content
           className={cn(
-            "fixed inset-y-0 right-0 z-50 flex w-[min(96vw,42rem)] flex-col border-l border-border bg-card shadow-2xl",
+            "fixed inset-y-0 right-0 z-50 flex flex-col border-l border-border bg-card shadow-2xl",
+            wide ? "w-[min(96vw,56rem)]" : "w-[min(96vw,42rem)]",
             "data-[state=open]:animate-in data-[state=closed]:animate-out"
           )}
         >

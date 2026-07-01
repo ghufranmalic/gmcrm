@@ -73,7 +73,7 @@ export const DEFAULT_HR_MODULES: HrModuleSettings = {
   attendance: true,
   leave: true,
   payroll: false,
-  recruitment: false,
+  recruitment: true,
   performance: true,
   expenses: false,
   training: false,
@@ -113,12 +113,7 @@ export const HR_MODULE_FIELD_PRESETS: Record<HrModuleKey, Array<{ key: string; l
     { key: "amount", label: "Net pay", type: "number" },
     { key: "status", label: "Status", type: "text" }
   ],
-  recruitment: [
-    { key: "role", label: "Role title", type: "text" },
-    { key: "candidate", label: "Candidate", type: "text" },
-    { key: "stage", label: "Stage", type: "text" },
-    { key: "owner", label: "Recruiter", type: "text" }
-  ],
+  recruitment: [],
   performance: [],
   expenses: [
     { key: "employee", label: "Employee", type: "text" },
