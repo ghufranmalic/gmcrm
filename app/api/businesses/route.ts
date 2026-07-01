@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { hashPassword } from "@/lib/auth";
-import { toClientBusiness, toDbHosting, type BusinessPayload } from "@/lib/business-mappers";
+import { toClientBusiness, toDbHosting, defaultHrModulesForIndustry, type BusinessPayload } from "@/lib/business-mappers";
+import { seedHrBusiness } from "@/lib/hr/seed";
 import { isDatabaseConfigured, prisma } from "@/lib/prisma";
 
 export async function GET() {
@@ -35,6 +36,7 @@ export async function POST(request: Request) {
       businessName: payload.businessName,
       domain: payload.domain,
       hosting: toDbHosting(payload.hosting),
+      hrModules: defaultHrModulesForIndustry(payload.industryKey),
       industryKey: payload.industryKey,
       notifications: payload.notifications,
       packageName: payload.packageName,
@@ -49,6 +51,10 @@ export async function POST(request: Request) {
       }
     }
   });
+
+  if (business.industryKey === "hr") {
+    await seedHrBusiness(business.id);
+  }
 
   return NextResponse.json({ business: toClientBusiness(business) }, { status: 201 });
 }

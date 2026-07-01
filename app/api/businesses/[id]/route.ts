@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { toClientBusiness, toDbHosting, type BusinessPayload } from "@/lib/business-mappers";
+import { toClientBusiness, toDbHosting, toDbStatus, defaultHrModulesForIndustry, type BusinessPayload } from "@/lib/business-mappers";
+import { revokeBusinessSessions } from "@/lib/hr/module-data";
 import { isDatabaseConfigured, prisma } from "@/lib/prisma";
 
 type RouteContext = {
@@ -14,6 +15,13 @@ export async function PATCH(request: Request, context: RouteContext) {
   const { id } = await context.params;
   const payload = (await request.json()) as Partial<BusinessPayload>;
 
+  const existing = await prisma.business.findUnique({ where: { id } });
+  if (!existing) {
+    return NextResponse.json({ error: "Business not found." }, { status: 404 });
+  }
+
+  const nextStatus = payload.status ? toDbStatus(payload.status) : undefined;
+
   const business = await prisma.business.update({
     where: { id },
     data: {
@@ -24,9 +32,15 @@ export async function PATCH(request: Request, context: RouteContext) {
       ...(payload.industryKey ? { industryKey: payload.industryKey } : {}),
       ...(payload.notifications ? { notifications: payload.notifications } : {}),
       ...(payload.packageName ? { packageName: payload.packageName } : {}),
-      ...(payload.records ? { records: payload.records } : {})
+      ...(payload.records ? { records: payload.records } : {}),
+      ...(payload.hrModules ? { hrModules: payload.hrModules } : {}),
+      ...(nextStatus ? { status: nextStatus } : {})
     }
   });
+
+  if (nextStatus === "INACTIVE") {
+    await revokeBusinessSessions(business.id);
+  }
 
   return NextResponse.json({ business: toClientBusiness(business) });
 }

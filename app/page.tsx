@@ -10,7 +10,6 @@ import {
   Dumbbell,
   FileText,
   GraduationCap,
-  LayoutDashboard,
   Mail,
   MessageSquareText,
   Palette,
@@ -27,7 +26,12 @@ import {
   WalletCards
 } from "lucide-react";
 import type { CSSProperties, ElementType, FormEvent, ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { OnboardingFlow, type OnboardingData } from "@/components/onboarding/onboarding-flow";
+import type { ManagedWorkspace } from "@/components/parent/workspace-manager";
+import { BrandLogo } from "@/components/brand-logo";
+import { brand } from "@/lib/brand";
+import { DEFAULT_HR_MODULES } from "@/lib/hr/modules";
 
 type IndustryKey = "hr" | "gym" | "school" | "restaurant";
 type PortalMode = "admin" | "client";
@@ -93,6 +97,8 @@ type BusinessWorkspace = Workspace & {
   packageName: "Starter" | "Professional" | "Enterprise";
   hosting: "Default subdomain" | "Custom domain" | "Client hosted";
   domain: string;
+  status: "Active" | "Inactive";
+  hrModules?: ManagedWorkspace["hrModules"];
   createdAt?: string;
   updatedAt?: string;
 };
@@ -102,7 +108,7 @@ type AppData = {
   currentBusinessId: string;
 };
 
-const storageKey = "gmcrm-multi-industry-v1";
+const storageKey = "dvibe-workspaces-v1";
 const today = new Date().toISOString().slice(0, 10);
 const colorOptions = ["#0f766e", "#1d4ed8", "#4d7c0f", "#a16207", "#be123c"];
 
@@ -532,8 +538,8 @@ const starterBusinesses: BusinessWorkspace[] = [
 ];
 
 const starterData: AppData = {
-  businesses: starterBusinesses,
-  currentBusinessId: starterBusinesses[0].id
+  businesses: [],
+  currentBusinessId: ""
 };
 
 function businessWorkspace(
@@ -551,6 +557,8 @@ function businessWorkspace(
     packageName: "Professional",
     hosting: "Default subdomain",
     domain: slugify(businessName),
+    status: "Active",
+    hrModules: industryKey === "hr" ? { ...DEFAULT_HR_MODULES } : undefined,
     records,
     notifications: [{ id: uid("notice"), channel: "Email", message: `${businessName} workspace ready`, createdAt: today }]
   };
@@ -589,10 +597,12 @@ function createBusinessWorkspace(values: {
     id: uid("biz"),
     industryKey: values.industryKey,
     businessName: name,
-    accent: config.accent,
+    accent: brand.colors.pink,
     packageName: values.packageName,
     hosting: values.hosting,
     domain: values.domain?.trim() || slugify(name),
+    status: "Active",
+    hrModules: values.industryKey === "hr" ? { ...DEFAULT_HR_MODULES } : undefined,
     records: emptyRecordsForIndustry(values.industryKey),
     notifications: [{ id: uid("notice"), channel: "Email", message: `${name} dashboard created`, createdAt: today }]
   };
@@ -606,12 +616,12 @@ function loadData(): AppData {
     const parsed = JSON.parse(stored) as AppData | Record<IndustryKey, Workspace>;
 
     if ("businesses" in parsed && Array.isArray(parsed.businesses)) {
-      const businesses = parsed.businesses.length ? parsed.businesses : starterBusinesses;
+      const businesses = parsed.businesses;
       return {
         businesses,
         currentBusinessId: businesses.some((business) => business.id === parsed.currentBusinessId)
           ? parsed.currentBusinessId
-          : businesses[0].id
+          : businesses[0]?.id ?? ""
       };
     }
 
@@ -688,6 +698,22 @@ export default function Home() {
     }
   }, [data, databaseEnabled]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const openId = params.get("open");
+    if (!openId) return;
+
+    const business = data.businesses.find((item) => item.id === openId);
+    if (!business) return;
+
+    setData((current) => ({ ...current, currentBusinessId: business.id }));
+    setActiveModuleKey(configs[business.industryKey].primaryModule);
+    setMode("admin");
+    setQuery("");
+    setView("dashboard");
+    window.history.replaceState({}, "", "/");
+  }, [data.businesses]);
+
   async function persistBusiness(next: BusinessWorkspace) {
     if (!databaseEnabled) {
       return next;
@@ -721,15 +747,12 @@ export default function Home() {
     setView("dashboard");
   }
 
-  async function createBusiness(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
+  async function launchWorkspace(onboarding: OnboardingData) {
     const nextBusiness = createBusinessWorkspace({
-      businessName: String(form.get("businessName") ?? ""),
-      domain: String(form.get("domain") ?? ""),
-      hosting: String(form.get("hosting") ?? "Default subdomain") as BusinessWorkspace["hosting"],
-      industryKey: String(form.get("industryKey") ?? "hr") as IndustryKey,
-      packageName: String(form.get("packageName") ?? "Professional") as BusinessWorkspace["packageName"]
+      businessName: onboarding.businessName,
+      hosting: "Default subdomain",
+      industryKey: onboarding.industryKey,
+      packageName: "Professional"
     });
 
     let savedBusiness = nextBusiness;
@@ -739,20 +762,38 @@ export default function Home() {
         const response = await fetch("/api/businesses", {
           body: JSON.stringify({
             ...nextBusiness,
-            ownerEmail: String(form.get("ownerEmail") ?? ""),
-            ownerName: String(form.get("ownerName") ?? "Business Owner"),
-            ownerPassword: String(form.get("ownerPassword") ?? "")
+            ownerEmail: onboarding.ownerEmail,
+            ownerName: onboarding.ownerName,
+            ownerPassword: onboarding.ownerPassword
           }),
           headers: { "Content-Type": "application/json" },
           method: "POST"
         });
 
         if (!response.ok) {
-          throw new Error("Failed to create business");
+          const result = (await response.json()) as { error?: string };
+          throw new Error(result.error ?? "Failed to create workspace");
         }
 
         const result = (await response.json()) as { business: BusinessWorkspace };
         savedBusiness = result.business;
+
+        const loginResponse = await fetch("/api/auth/login", {
+          body: JSON.stringify({
+            domain: savedBusiness.domain,
+            email: onboarding.ownerEmail,
+            password: onboarding.ownerPassword
+          }),
+          headers: { "Content-Type": "application/json" },
+          method: "POST"
+        });
+
+        if (!loginResponse.ok) {
+          throw new Error("Workspace created but sign-in failed. Use your portal login link.");
+        }
+
+        window.location.href = `/portal/${savedBusiness.domain}`;
+        return;
       } finally {
         setIsSyncing(false);
       }
@@ -766,7 +807,6 @@ export default function Home() {
     setMode("admin");
     setQuery("");
     setView("dashboard");
-    event.currentTarget.reset();
   }
 
   function chooseMode(nextMode: PortalMode) {
@@ -873,175 +913,41 @@ export default function Home() {
 
   if (view === "parent") {
     return (
-      <main className="app-shell parent-shell">
-        <header className="topbar">
-          <div className="brand">
-            <div className="brand-mark">GM</div>
-            <div>
-              <p className="brand-title">GM CRM Parent Dashboard</p>
-              <p className="brand-subtitle">Create and manage business dashboards</p>
-            </div>
-          </div>
-          <div className="top-actions">
-            <span className="status-pill">
-              <Bell size={14} />
-              {databaseEnabled ? (isSyncing ? "Syncing" : "Postgres") : "Local demo"}
-            </span>
-            <span className="status-pill">
-              <LayoutDashboard size={14} />
-              {data.businesses.length} dashboards
-            </span>
-            <button className="icon-button" onClick={resetDemo} aria-label="Reset demo data">
-              <Save size={17} />
-            </button>
-          </div>
-        </header>
-
-        <section className="parent-hero">
-          <div>
-            <p className="eyebrow">Parent admin</p>
-            <h1>Create a branded CRM dashboard for any business.</h1>
-            <p>
-              Select an industry, set package and hosting, then open the generated business portal with its own modules,
-              data, branding, and notification log.
-            </p>
-          </div>
-          <form className="create-business-form" onSubmit={createBusiness}>
-            <label className="field">
-              <span>Business name</span>
-              <input className="input" name="businessName" placeholder="Example: Green Leaf Gym" required />
-            </label>
-            <label className="field">
-              <span>Industry</span>
-              <select className="select" name="industryKey">
-                {Object.values(configs).map((industry) => (
-                  <option key={industry.key} value={industry.key}>
-                    {industry.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              <span>Package</span>
-              <select className="select" name="packageName" defaultValue="Professional">
-                <option>Starter</option>
-                <option>Professional</option>
-                <option>Enterprise</option>
-              </select>
-            </label>
-            <label className="field">
-              <span>Hosting</span>
-              <select className="select" name="hosting" defaultValue="Default subdomain">
-                <option>Default subdomain</option>
-                <option>Custom domain</option>
-                <option>Client hosted</option>
-              </select>
-            </label>
-            <label className="field">
-              <span>Domain or subdomain</span>
-              <input className="input" name="domain" placeholder="business-name or portal.business.com" />
-            </label>
-            <label className="field">
-              <span>Owner name</span>
-              <input className="input" name="ownerName" placeholder="Business owner" required />
-            </label>
-            <label className="field">
-              <span>Owner login email</span>
-              <input className="input" name="ownerEmail" placeholder="owner@business.com" required type="email" />
-            </label>
-            <label className="field">
-              <span>Owner password</span>
-              <input className="input" minLength={8} name="ownerPassword" placeholder="At least 8 characters" required type="password" />
-            </label>
-            <button className="primary-button" type="submit">
-              <Plus size={16} />
-              Create dashboard
-            </button>
-          </form>
-        </section>
-
-        <section className="business-board">
-          <div className="section-header">
-            <div>
-              <h2 className="section-title">Business Dashboards</h2>
-              <p className="section-copy">Open any business to manage its industry-specific CRM portal.</p>
-            </div>
-          </div>
-          <div className="business-grid">
-            {data.businesses.map((business) => {
-              const businessConfig = configs[business.industryKey];
-              const Icon = businessConfig.icon;
-              const totalRecords = Object.values(business.records).reduce((total, list) => total + list.length, 0);
-
-              return (
-                <article className="business-card" key={business.id} style={{ "--accent": business.accent } as CSSProperties}>
-                  <div className="business-card-top">
-                    <span className="row-icon">
-                      <Icon size={17} />
-                    </span>
-                    <span className="mini-pill">{business.packageName}</span>
-                  </div>
-                  <h3>{business.businessName}</h3>
-                  <p>{businessConfig.name} / {business.hosting}</p>
-                  <div className="business-meta">
-                    <span>{totalRecords} records</span>
-                    <span>/portal/{business.domain || slugify(business.businessName)}</span>
-                  </div>
-                  <a className="secondary-button" href={`/portal/${business.domain || slugify(business.businessName)}/login`}>
-                    Owner login
-                  </a>
-                  <button className="primary-button" onClick={() => openBusiness(business.id)}>
-                    <LayoutDashboard size={16} />
-                    Open dashboard
-                  </button>
-                </article>
-              );
-            })}
-          </div>
-        </section>
-      </main>
+      <OnboardingFlow
+        databaseEnabled={databaseEnabled}
+        isSyncing={isSyncing}
+        onCreate={launchWorkspace}
+      />
     );
   }
 
   return (
-    <main className="app-shell hr-shell" style={{ "--accent": workspaceData.accent } as CSSProperties}>
-      <header className="topbar">
-        <div className="brand">
-          <div className="brand-mark">GM</div>
-          <div>
-            <p className="brand-title">{workspaceData.businessName}</p>
-            <p className="brand-subtitle">Functional multi-industry CRM portal</p>
+    <main className="min-h-screen" style={{ "--tenant-accent": workspaceData.accent } as CSSProperties}>
+      <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 max-w-7xl flex-wrap items-center justify-between gap-3 px-4 sm:px-6">
+          <div className="flex items-center gap-3">
+            <BrandLogo size={40} />
+            <div>
+              <p className="font-semibold">{workspaceData.businessName}</p>
+              <p className="text-xs text-muted-foreground">{brand.name} · demo editor</p>
+            </div>
           </div>
-        </div>
-        <div className="top-actions">
-          <span className="status-pill">
-            <Bell size={14} />
-            {databaseEnabled ? (isSyncing ? "Syncing" : "Postgres") : "Local demo"}
-          </span>
-          <button className="secondary-button" onClick={() => setView("parent")}>
-            <LayoutDashboard size={16} />
-            Parent
-          </button>
-          <select className="select compact-select" value={currentBusiness.id} onChange={(event) => openBusiness(event.target.value)}>
-            {data.businesses.map((business) => (
-              <option key={business.id} value={business.id}>
-                {business.businessName}
-              </option>
-            ))}
-          </select>
-          <div className="role-switch" aria-label="Portal mode">
-            <button className={mode === "admin" ? "active" : ""} onClick={() => chooseMode("admin")}>
-              <ShieldCheck size={15} />
-              {config.adminLabel}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-border bg-muted/50 px-3 py-1 text-xs text-muted-foreground">
+              {databaseEnabled ? (isSyncing ? "Syncing" : "Postgres") : "Local demo"}
+            </span>
+            <button className="inline-flex h-9 items-center rounded-xl border border-border px-3 text-sm hover:bg-muted" onClick={() => setView("parent")} type="button">
+              Home
             </button>
-            <button className={mode === "client" ? "active" : ""} onClick={() => chooseMode("client")}>
-              <UserRoundCheck size={15} />
-              {config.clientLabel}
+            <select className="h-9 rounded-xl border border-input bg-muted/50 px-3 text-sm" value={currentBusiness.id} onChange={(event) => openBusiness(event.target.value)}>
+              {data.businesses.map((business) => (
+                <option key={business.id} value={business.id}>{business.businessName}</option>
+              ))}
+            </select>
+            <button className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border hover:bg-muted" onClick={resetDemo} aria-label="Reset" type="button">
+              <Save size={17} />
             </button>
           </div>
-          <button className="icon-button" onClick={resetDemo} aria-label="Reset demo data">
-            <Save size={17} />
-          </button>
         </div>
       </header>
 

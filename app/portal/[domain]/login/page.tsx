@@ -4,10 +4,12 @@ import { prisma } from "@/lib/prisma";
 
 type LoginPageProps = {
   params: Promise<{ domain: string }>;
+  searchParams: Promise<{ inactive?: string }>;
 };
 
-export default async function BusinessLoginPage({ params }: LoginPageProps) {
+export default async function BusinessLoginPage({ params, searchParams }: LoginPageProps) {
   const { domain } = await params;
+  const query = await searchParams;
   const business = await prisma.business.findUnique({ where: { domain } });
   const records = (business?.records ?? {}) as ModuleRecords;
   const branding = asRecordList(records, "brandingSettings")[0] ?? {};
@@ -15,9 +17,10 @@ export default async function BusinessLoginPage({ params }: LoginPageProps) {
 
   return (
     <BusinessLoginForm
-      accent={String(branding.accent ?? business?.accent ?? "#0f766e")}
+      accent={String(branding.accent ?? business?.accent ?? "#ff2e7e")}
       businessName={String(branding.brandName ?? business?.businessName ?? domain)}
       domain={domain}
+      inactive={business?.status === "INACTIVE" || query.inactive === "1"}
       logoUrl={String(branding.logoUrl ?? "")}
       useBranding={useBranding}
     />

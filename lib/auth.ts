@@ -1,5 +1,6 @@
-import { createHash, randomBytes, scryptSync, timingSafeEqual } from "crypto";
+import { cache } from "react";
 import { cookies } from "next/headers";
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
 
 const sessionCookie = "gmcrm_session";
@@ -61,7 +62,7 @@ export async function clearSessionCookie() {
   cookieStore.delete(sessionCookie);
 }
 
-export async function getCurrentSession() {
+export const getCurrentSession = cache(async () => {
   const cookieStore = await cookies();
   const token = cookieStore.get(sessionCookie)?.value;
   if (!token) return null;
@@ -70,7 +71,17 @@ export async function getCurrentSession() {
     include: {
       user: {
         include: {
-          business: true
+          business: {
+            select: {
+              accent: true,
+              businessName: true,
+              domain: true,
+              hosting: true,
+              id: true,
+              industryKey: true,
+              packageName: true
+            }
+          }
         }
       }
     },
@@ -85,4 +96,4 @@ export async function getCurrentSession() {
   }
 
   return session;
-}
+});

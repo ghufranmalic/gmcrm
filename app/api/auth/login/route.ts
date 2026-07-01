@@ -32,6 +32,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid login details." }, { status: 401 });
   }
 
+  if (business.status === "INACTIVE") {
+    return NextResponse.json({ error: "This workspace is inactive. Contact your platform administrator." }, { status: 403 });
+  }
+
   const session = await createSession(user.id);
   await setSessionCookie(session.token, session.expiresAt);
 

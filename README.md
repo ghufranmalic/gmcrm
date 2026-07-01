@@ -1,4 +1,4 @@
-# GM CRM
+# Dvibe
 
 A lightweight multi-industry CRM portal builder for HR teams, gyms, schools, and restaurants.
 

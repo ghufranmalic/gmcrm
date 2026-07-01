@@ -39,6 +39,48 @@ function buildSimplePdf(title: string, lines: string[]) {
   return `%PDF-1.4\n${content}\nxref\n0 ${objects.length + 1}\n${xref.join("\n")}\ntrailer << /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${startXref}\n%%EOF`;
 }
 
+async function loadDatasetRecords(businessId: string, industryKey: string, dataset: string, recordsJson: ModuleRecords) {
+  if (industryKey !== "hr") {
+    return asRecordList(recordsJson, dataset);
+  }
+
+  if (dataset === "employees") {
+    const employees = await prisma.employee.findMany({
+      include: { department: true },
+      where: { businessId }
+    });
+    return employees.map((employee) => ({
+      department: employee.department?.name ?? "Unassigned",
+      email: employee.email,
+      employmentType: employee.employmentType ?? "",
+      id: employee.id,
+      name: employee.name,
+      startDate: employee.startDate?.toISOString().slice(0, 10) ?? "",
+      status: employee.status,
+      title: employee.title ?? ""
+    }));
+  }
+
+  if (dataset === "leaveRequests") {
+    const leaves = await prisma.leaveRequest.findMany({
+      include: { employee: { include: { department: true } }, leaveType: true },
+      where: { businessId }
+    });
+    return leaves.map((leave) => ({
+      department: leave.employee.department?.name ?? "Unassigned",
+      from: leave.fromDate.toISOString().slice(0, 10),
+      id: leave.id,
+      person: leave.employee.name,
+      reason: leave.reason,
+      status: leave.status,
+      to: leave.toDate.toISOString().slice(0, 10),
+      type: leave.leaveType.name
+    }));
+  }
+
+  return asRecordList(recordsJson, dataset);
+}
+
 export async function GET(request: Request, { params }: ExportRouteProps) {
   const { id } = await params;
   const session = await getCurrentSession();
@@ -62,7 +104,7 @@ export async function GET(request: Request, { params }: ExportRouteProps) {
     return NextResponse.json({ error: "Business not found" }, { status: 404 });
   }
 
-  const records = asRecordList(business.records as ModuleRecords, dataset).filter((record) => {
+  const records = (await loadDatasetRecords(business.id, business.industryKey, dataset, business.records as ModuleRecords)).filter((record) => {
     return filter ? JSON.stringify(record).toLowerCase().includes(filter) : true;
   });
   const grouped = groupRecords(records, groupBy);
