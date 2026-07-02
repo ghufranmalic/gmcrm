@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { asRecordList } from "@/lib/hr-suite";
+import { asRecordList, type ModuleRecords } from "@/lib/hr-suite";
 import type {
   GENDER_OPTIONS,
   JOB_TYPES,
@@ -180,7 +180,7 @@ export function getBusinessBranding(
   business: { accent: string; businessName: string; domain: string; records: unknown },
   records?: unknown
 ): BusinessBranding {
-  const source = records ?? business.records;
+  const source = (records ?? business.records) as ModuleRecords;
   const branding = asRecordList(source, "brandingSettings")[0] ?? {};
   const logoUrl = String(branding.logoUrl ?? "").trim();
 
