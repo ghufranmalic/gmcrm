@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { RecruitmentWorkspace } from "@/components/portal/recruitment-workspace";
-import { publishJobAction } from "@/lib/hr/portal-actions";
+import { saveJobAction } from "@/lib/hr/portal-actions";
 import { requireHrModule } from "@/lib/hr/require-module";
 import { requirePortalContext } from "@/lib/hr/portal-context";
 import { listJobPostings, suggestJobId } from "@/lib/hr/recruitment";
@@ -23,7 +23,7 @@ export default async function RecruitmentPage({ params, searchParams }: PageProp
     suggestJobId(business.id, domain)
   ]);
 
-  const publishAction = publishJobAction.bind(null, domain);
+  const saveAction = saveJobAction.bind(null, domain);
   const today = new Date().toISOString().slice(0, 10);
 
   return (
@@ -32,7 +32,7 @@ export default async function RecruitmentPage({ params, searchParams }: PageProp
       domain={domain}
       error={error}
       jobs={jobs}
-      publishAction={publishAction}
+      saveAction={saveAction}
       today={today}
     />
   );

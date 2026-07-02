@@ -6,6 +6,7 @@ import { TagInput } from "@/components/portal/tag-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import type { JobPosting } from "@/lib/hr/recruitment";
 import {
   BENEFIT_OPTIONS,
   CURRENCIES,
@@ -25,27 +26,33 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h3 className="text-sm font-semibold text-foreground">{children}</h3>;
 }
 
-export function CreateJobForm({
+export function JobForm({
   defaultJobId,
-  onSubmit,
-  today
+  job,
+  minClosingDate,
+  onSubmit
 }: {
   defaultJobId: string;
+  job?: JobPosting;
+  minClosingDate: string;
   onSubmit: (formData: FormData) => void | Promise<void>;
-  today: string;
 }) {
-  const [jobId, setJobId] = useState(defaultJobId);
-  const [education, setEducation] = useState("");
-  const [skills, setSkills] = useState<string[]>([]);
-  const [certifications, setCertifications] = useState<string[]>([]);
-  const [benefits, setBenefits] = useState<string[]>([]);
+  const [jobId, setJobId] = useState(job?.jobId ?? defaultJobId);
+  const [education, setEducation] = useState(job?.education ?? "");
+  const [skills, setSkills] = useState<string[]>(job?.skills ?? []);
+  const [certifications, setCertifications] = useState<string[]>(job?.certifications ?? []);
+  const [benefits, setBenefits] = useState<string[]>(job?.benefits ?? []);
+  const isEdit = Boolean(job);
+  const isExpired = job?.status === "expired";
 
   return (
     <form action={onSubmit} className="space-y-6">
+      {job ? <input name="recordId" type="hidden" value={job.id} /> : null}
+
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="space-y-1 sm:col-span-2">
           <FieldLabel>Title</FieldLabel>
-          <Input name="title" placeholder="e.g. Senior Software Engineer" required />
+          <Input defaultValue={job?.title} name="title" placeholder="e.g. Senior Software Engineer" required />
         </label>
 
         <label className="space-y-1">
@@ -54,30 +61,45 @@ export function CreateJobForm({
             name="jobId"
             onChange={(event) => setJobId(event.target.value)}
             placeholder="Auto-generated — override if needed"
+            readOnly={isEdit}
             required
             value={jobId}
           />
-          <p className="text-xs text-muted-foreground">Auto-suggested. You can enter a custom ID.</p>
+          <p className="text-xs text-muted-foreground">
+            {isEdit ? "Job ID cannot be changed after creation." : "Auto-suggested. You can enter a custom ID."}
+          </p>
         </label>
 
         <label className="space-y-1">
           <FieldLabel>Closing date</FieldLabel>
-          <Input defaultValue={today} min={today} name="closingDate" required type="date" />
+          <Input
+            defaultValue={job?.closingDate ?? minClosingDate}
+            min={minClosingDate}
+            name="closingDate"
+            required
+            type="date"
+          />
         </label>
 
         <label className="space-y-1">
           <FieldLabel>Open positions</FieldLabel>
-          <Input defaultValue="1" min="1" name="openPositions" required type="number" />
+          <Input
+            defaultValue={job?.openPositions ?? 1}
+            min="1"
+            name="openPositions"
+            required
+            type="number"
+          />
         </label>
 
         <label className="space-y-1">
           <FieldLabel>Location (city / country)</FieldLabel>
-          <Input name="location" placeholder="e.g. Dubai, UAE" required />
+          <Input defaultValue={job?.location} name="location" placeholder="e.g. Dubai, UAE" required />
         </label>
 
         <label className="space-y-1">
           <FieldLabel>Work preference</FieldLabel>
-          <Select defaultValue="Hybrid" name="workPreference" required>
+          <Select defaultValue={job?.workPreference ?? "Hybrid"} name="workPreference" required>
             {WORK_PREFERENCES.map((option) => (
               <option key={option} value={option}>
                 {option}
@@ -92,7 +114,13 @@ export function CreateJobForm({
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="space-y-1">
             <FieldLabel>Experience (years)</FieldLabel>
-            <Input defaultValue="0" min="0" name="experienceYears" required type="number" />
+            <Input
+              defaultValue={job?.experienceYears ?? 0}
+              min="0"
+              name="experienceYears"
+              required
+              type="number"
+            />
           </label>
 
           <div className="sm:col-span-2">
@@ -135,7 +163,7 @@ export function CreateJobForm({
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="space-y-1">
             <FieldLabel>Salary type</FieldLabel>
-            <Select defaultValue="Monthly" name="salaryType" required>
+            <Select defaultValue={job?.salaryType ?? "Monthly"} name="salaryType" required>
               {SALARY_TYPES.map((option) => (
                 <option key={option} value={option}>
                   {option}
@@ -146,12 +174,12 @@ export function CreateJobForm({
 
           <label className="space-y-1">
             <FieldLabel>Salary</FieldLabel>
-            <Input name="salary" placeholder="e.g. 15000" required type="number" />
+            <Input defaultValue={job?.salary} name="salary" placeholder="e.g. 15000" required type="number" />
           </label>
 
           <label className="space-y-1">
             <FieldLabel>Currency</FieldLabel>
-            <Select defaultValue="USD" name="currency" required>
+            <Select defaultValue={job?.currency ?? "USD"} name="currency" required>
               {CURRENCIES.map((option) => (
                 <option key={option} value={option}>
                   {option}
@@ -162,7 +190,7 @@ export function CreateJobForm({
 
           <label className="space-y-1">
             <FieldLabel>Job type</FieldLabel>
-            <Select defaultValue="Permanent" name="jobType" required>
+            <Select defaultValue={job?.jobType ?? "Permanent"} name="jobType" required>
               {JOB_TYPES.map((option) => (
                 <option key={option} value={option}>
                   {option}
@@ -186,7 +214,7 @@ export function CreateJobForm({
 
       <label className="block space-y-1">
         <FieldLabel>Gender</FieldLabel>
-        <Select defaultValue="All" name="gender" required>
+        <Select defaultValue={job?.gender ?? "All"} name="gender" required>
           {GENDER_OPTIONS.map((option) => (
             <option key={option} value={option}>
               {option}
@@ -200,6 +228,7 @@ export function CreateJobForm({
           <FieldLabel>Job description</FieldLabel>
           <textarea
             className="min-h-40 w-full rounded-xl border border-input bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tenant-accent,#ff2e7e)]"
+            defaultValue={job?.description}
             name="description"
             placeholder="Describe the role, team, and responsibilities…"
             required
@@ -210,6 +239,7 @@ export function CreateJobForm({
           <FieldLabel>Requirements</FieldLabel>
           <textarea
             className="min-h-32 w-full rounded-xl border border-input bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tenant-accent,#ff2e7e)]"
+            defaultValue={job?.requirements}
             name="requirements"
             placeholder="List must-have qualifications and experience…"
             required
@@ -218,12 +248,25 @@ export function CreateJobForm({
       </div>
 
       <div className="flex flex-wrap gap-2 border-t border-border pt-4">
-        <Button name="intent" type="submit" value="publish">
-          Publish
-        </Button>
-        <Button name="intent" type="submit" value="draft" variant="outline">
-          Save draft
-        </Button>
+        {isExpired ? (
+          <>
+            <Button name="intent" type="submit" value="reactivate">
+              Reactivate & publish
+            </Button>
+            <Button name="intent" type="submit" value="deactivate" variant="outline">
+              Deactivate
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button name="intent" type="submit" value="publish">
+              {isEdit ? "Save & publish" : "Publish"}
+            </Button>
+            <Button name="intent" type="submit" value="draft" variant="outline">
+              {isEdit ? "Save draft" : "Save draft"}
+            </Button>
+          </>
+        )}
       </div>
     </form>
   );

@@ -20,7 +20,7 @@ import { createPerformanceReview, updatePerformanceReview } from "@/lib/hr/perfo
 import { notifyUser, writeAuditLog } from "@/lib/hr/audit";
 import { canManageUsers } from "@/lib/hr/permissions";
 import { ensureEmployeeForUser } from "@/lib/hr/seed";
-import { createJobPosting, isJobIdTaken } from "@/lib/hr/recruitment";
+import { addJobApplication, isJobIdTaken, saveJobPosting } from "@/lib/hr/recruitment";
 import type {
   GENDER_OPTIONS,
   JOB_TYPES,
@@ -462,7 +462,36 @@ function parseJsonArray(value: FormDataEntryValue | null) {
   }
 }
 
-export async function publishJobAction(domain: string, formData: FormData) {
+function jobFieldsFromForm(formData: FormData) {
+  return {
+    benefits: parseJsonArray(formData.get("benefits")),
+    certifications: parseJsonArray(formData.get("certifications")),
+    closingDate: String(formData.get("closingDate") ?? ""),
+    currency: String(formData.get("currency") ?? "USD"),
+    description: String(formData.get("description") ?? ""),
+    education: String(formData.get("education") ?? ""),
+    experienceYears: Number(formData.get("experienceYears") ?? 0),
+    gender: String(formData.get("gender") ?? "All") as (typeof GENDER_OPTIONS)[number],
+    jobId: String(formData.get("jobId") ?? "").trim(),
+    jobType: String(formData.get("jobType") ?? "Permanent") as (typeof JOB_TYPES)[number],
+    location: String(formData.get("location") ?? ""),
+    openPositions: Number(formData.get("openPositions") ?? 1),
+    requirements: String(formData.get("requirements") ?? ""),
+    salary: String(formData.get("salary") ?? ""),
+    salaryType: String(formData.get("salaryType") ?? "Monthly") as (typeof SALARY_TYPES)[number],
+    skills: parseJsonArray(formData.get("skills")),
+    title: String(formData.get("title") ?? "").trim(),
+    workPreference: String(formData.get("workPreference") ?? "On-site") as (typeof WORK_PREFERENCES)[number]
+  };
+}
+
+function resolveJobIntent(intent: string) {
+  if (intent === "publish" || intent === "reactivate") return "published" as const;
+  if (intent === "deactivate" || intent === "draft") return "draft" as const;
+  return "draft" as const;
+}
+
+export async function saveJobAction(domain: string, formData: FormData) {
   "use server";
 
   const session = await getCurrentSession();
@@ -472,46 +501,80 @@ export async function publishJobAction(domain: string, formData: FormData) {
   if (!business) redirect(`/portal/${domain}/recruitment`);
 
   const intent = String(formData.get("intent") ?? "publish");
-  const jobId = String(formData.get("jobId") ?? "").trim();
-  const title = String(formData.get("title") ?? "").trim();
+  const recordId = String(formData.get("recordId") ?? "").trim();
+  const fields = jobFieldsFromForm(formData);
+  const today = new Date().toISOString().slice(0, 10);
 
-  if (!jobId || !title) redirect(`/portal/${domain}/recruitment`);
+  if (!fields.jobId || !fields.title) redirect(`/portal/${domain}/recruitment`);
 
-  if (await isJobIdTaken(business.id, jobId)) {
+  if (intent === "reactivate" && fields.closingDate < today) {
+    redirect(`/portal/${domain}/recruitment?error=closing-date`);
+  }
+
+  if (await isJobIdTaken(business.id, fields.jobId, recordId || undefined)) {
     redirect(`/portal/${domain}/recruitment?error=job-id-taken`);
   }
 
-  const job = await createJobPosting({
+  const status = resolveJobIntent(intent);
+
+  const job = await saveJobPosting({
     businessId: business.id,
     job: {
-      benefits: parseJsonArray(formData.get("benefits")),
-      certifications: parseJsonArray(formData.get("certifications")),
-      closingDate: String(formData.get("closingDate") ?? ""),
-      currency: String(formData.get("currency") ?? "USD"),
-      description: String(formData.get("description") ?? ""),
-      education: String(formData.get("education") ?? ""),
-      experienceYears: Number(formData.get("experienceYears") ?? 0),
-      gender: String(formData.get("gender") ?? "All") as (typeof GENDER_OPTIONS)[number],
-      jobId,
-      jobType: String(formData.get("jobType") ?? "Permanent") as (typeof JOB_TYPES)[number],
-      location: String(formData.get("location") ?? ""),
-      openPositions: Number(formData.get("openPositions") ?? 1),
-      requirements: String(formData.get("requirements") ?? ""),
-      salary: String(formData.get("salary") ?? ""),
-      salaryType: String(formData.get("salaryType") ?? "Monthly") as (typeof SALARY_TYPES)[number],
-      skills: parseJsonArray(formData.get("skills")),
-      status: intent === "publish" ? "published" : "draft",
-      title,
-      workPreference: String(formData.get("workPreference") ?? "On-site") as (typeof WORK_PREFERENCES)[number]
+      ...fields,
+      id: recordId || undefined,
+      status
     }
   });
 
+  revalidatePath(`/portal/${domain}/recruitment`);
+  revalidatePath(`/portal/${domain}/jobs/${job.jobId}`);
+
   if (job.status === "published") {
-    revalidatePath(`/portal/${domain}/recruitment`);
-    revalidatePath(`/portal/${domain}/jobs/${job.jobId}`);
     redirect(`/portal/${domain}/jobs/${encodeURIComponent(job.jobId)}`);
   }
 
-  revalidatePath(`/portal/${domain}/recruitment`);
   redirect(`/portal/${domain}/recruitment`);
+}
+
+export async function applyToJobAction(domain: string, jobId: string, formData: FormData) {
+  "use server";
+
+  const applicantName = String(formData.get("applicantName") ?? "").trim();
+  const applicantEmail = String(formData.get("applicantEmail") ?? "").trim().toLowerCase();
+  const coverLetter = String(formData.get("coverLetter") ?? "").trim();
+  const cv = formData.get("cv");
+
+  if (!applicantName || !applicantEmail || !coverLetter) {
+    redirect(`/portal/${domain}/jobs/${encodeURIComponent(jobId)}?error=missing-fields`);
+  }
+
+  if (!(cv instanceof File) || cv.size === 0) {
+    redirect(`/portal/${domain}/jobs/${encodeURIComponent(jobId)}?error=cv-required`);
+  }
+
+  if (cv.size > 2 * 1024 * 1024) {
+    redirect(`/portal/${domain}/jobs/${encodeURIComponent(jobId)}?error=cv-too-large`);
+  }
+
+  const buffer = Buffer.from(await cv.arrayBuffer());
+  const cvDataUrl = `data:${cv.type || "application/octet-stream"};base64,${buffer.toString("base64")}`;
+
+  await addJobApplication({
+    applicantEmail,
+    applicantName,
+    coverLetter,
+    cvDataUrl,
+    cvFileName: cv.name || "cv.pdf",
+    domain,
+    jobId,
+    skills: parseJsonArray(formData.get("skills"))
+  });
+
+  revalidatePath(`/portal/${domain}/jobs/${jobId}`);
+  revalidatePath(`/portal/${domain}/recruitment`);
+  redirect(`/portal/${domain}/jobs/${encodeURIComponent(jobId)}?applied=1`);
+}
+
+export async function publishJobAction(domain: string, formData: FormData) {
+  return saveJobAction(domain, formData);
 }

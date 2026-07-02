@@ -2,11 +2,14 @@ import type { CSSProperties } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { BusinessBrandMark } from "@/components/portal/business-brand-mark";
+import { PublicJobApply } from "@/components/portal/public-job-apply";
 import { Badge } from "@/components/ui/badge";
+import { applyToJobAction } from "@/lib/hr/portal-actions";
 import { getPublishedJob } from "@/lib/hr/recruitment";
 
 type PublicJobPageProps = {
   params: Promise<{ domain: string; jobId: string }>;
+  searchParams: Promise<{ applied?: string; error?: string }>;
 };
 
 export async function generateMetadata({ params }: PublicJobPageProps): Promise<Metadata> {
@@ -16,16 +19,20 @@ export async function generateMetadata({ params }: PublicJobPageProps): Promise<
 
   return {
     description: `${result.job.title} at ${result.business.brandName}`,
+    icons: result.business.logoUrl ? { icon: result.business.logoUrl } : undefined,
     title: `${result.job.title} · ${result.business.brandName}`
   };
 }
 
-export default async function PublicJobPage({ params }: PublicJobPageProps) {
+export default async function PublicJobPage({ params, searchParams }: PublicJobPageProps) {
   const { domain, jobId } = await params;
-  const result = await getPublishedJob(domain, decodeURIComponent(jobId));
+  const query = await searchParams;
+  const decodedJobId = decodeURIComponent(jobId);
+  const result = await getPublishedJob(domain, decodedJobId);
   if (!result) notFound();
 
   const { business, job } = result;
+  const applyAction = applyToJobAction.bind(null, domain, decodedJobId);
 
   return (
     <main
@@ -53,7 +60,19 @@ export default async function PublicJobPage({ params }: PublicJobPageProps) {
       </header>
 
       <div className="mx-auto max-w-4xl space-y-8 px-4 py-8 sm:px-6">
-        <section className="space-y-3">
+        {query.applied === "1" ? (
+          <p className="rounded-xl border border-success/30 bg-success/10 px-4 py-3 text-sm text-success">
+            Your application has been submitted. {business.brandName} will review it soon.
+          </p>
+        ) : null}
+
+        {query.error ? (
+          <p className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+            Could not submit your application. Check your CV file and try again.
+          </p>
+        ) : null}
+
+        <section className="space-y-4">
           <p className="text-xs font-medium uppercase tracking-[0.2em]" style={{ color: business.accent }}>
             {business.brandName}
           </p>
@@ -67,6 +86,7 @@ export default async function PublicJobPage({ params }: PublicJobPageProps) {
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground">Closes {job.closingDate}</p>
+          <PublicJobApply accent={business.accent} applyAction={applyAction} jobSkills={job.skills} />
         </section>
 
         <section className="grid gap-4 sm:grid-cols-2">
